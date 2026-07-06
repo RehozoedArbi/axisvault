@@ -3,3 +3,6 @@ node_modules
 .vscode
 .vercel
 .env*
+ATTRIBUTIONS.md
+pnpm-workspace.yaml
+.gitignore
