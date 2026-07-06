@@ -3,7 +3,7 @@ name: Notify WhatsApp on push to main
 on:
   push:
     branches: [main]
-
+  workflow_dispatch:
 permissions:
   contents: read
 
