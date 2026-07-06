@@ -624,7 +624,7 @@ function LandingPage({ lang, setLang, onEnter }) {
           fontFamily: FONT_BODY,
         }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.violet, animation: "vaultPulse 2s ease-in-out infinite" }} />
-          {lang === "fr" ? "Accountability sans compromis" : "Zero-excuse accountability"}
+          {lang === "fr" ? "Zero-excuse  sans compromis" : "Zero excuses, zero compromises"}
         </div>
 
         {/* 3D Vault animé */}
