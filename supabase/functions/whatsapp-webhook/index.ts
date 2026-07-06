@@ -152,28 +152,40 @@ async function runStatus(supabase: ReturnType<typeof createClient>): Promise<str
 }
 
 // ─── RESTART command ──────────────────────────────────────────────────────────
-// Triggers the "deploy" GitHub Actions workflow via workflow_dispatch.
-// The workflow must exist at .github/workflows/deploy.yml in your repo.
+// Vercel is already linked to GitHub main → auto-deploys on push.
+// For restart, we trigger a new deployment directly via Vercel API
+// (redeploy the latest deployment) — no GitHub Actions needed.
 async function runRestart(): Promise<string> {
-  const res = await fetch(
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/deploy.yml/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GITHUB_TOKEN}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ref: "main" }),
-    }
+  // 1. Get the latest deployment
+  const listRes = await fetch(
+    `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=1`,
+    { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
   );
+  const listData = await listRes.json();
+  const latest = listData.deployments?.[0];
 
-  if (res.status === 204) {
-    return `🔨 *Restart triggered*\n\nGitHub Actions workflow dispatched on \`main\`.\nVercel deployment will start in ~30s.\n\nSend \`status\` in 2min to check progress.`;
+  if (!latest) throw new Error("No deployment found to redeploy.");
+
+  // 2. Redeploy it (Vercel: POST /v13/deployments with deploymentId source)
+  const redeployRes = await fetch("https://api.vercel.com/v13/deployments", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${VERCEL_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      deploymentId: latest.uid,  // clone this deployment
+      name: VERCEL_PROJECT_ID,
+      target: "production",
+    }),
+  });
+
+  const redeployData = await redeployRes.json();
+
+  if (redeployRes.ok) {
+    return `🔨 *Restart triggered*\n\nRedeploying last production build.\nExpected in ~30–60s.\n\nSend \`status\` in 1min to check.`;
   } else {
-    const body = await res.text();
-    throw new Error(`GitHub API error ${res.status}: ${body}`);
+    throw new Error(`Vercel redeploy error ${redeployRes.status}: ${redeployData.error?.message ?? JSON.stringify(redeployData)}`);
   }
 }
 
