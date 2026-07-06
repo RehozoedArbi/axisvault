@@ -863,13 +863,13 @@ function Login({ lang, setLang }) {
           <span style={{background:T.grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}></span>
         </h1>
         <p style={{fontSize:14,color:T.tx2,lineHeight:1.7,marginBottom:44}}>{t.loginSub}</p>
-        <button onClick={go} disabled={loading}
+        {/* <button onClick={go} disabled={loading}
           style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,width:"100%",padding:"14px 20px",borderRadius:11,background:"#fff",border:"none",cursor:loading?"not-allowed":"pointer",fontFamily:FONT_DISPLAY,fontSize:15,fontWeight:600,color:"#111",boxShadow:"0 2px 20px rgba(0,0,0,.3)",transition:"all .15s",opacity:loading?.7:1}}
           onMouseEnter={e=>{if(!loading){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 28px rgba(0,0,0,.38)";}}}
           onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 20px rgba(0,0,0,.3)";}}>
           {loading?<div style={{width:18,height:18,border:"2.5px solid #ddd",borderTopColor:"#8B5CF6",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>:<GoogleLogo/>}
           {loading?t.signingIn:t.google}
-        </button>
+        </button> */}
         {error&&<p style={{fontSize:13,color:T.red,marginTop:14}}>{error}</p>}
         <p style={{fontSize:12,color:T.tx3,marginTop:22,lineHeight:1.6}}>{t.terms}</p>
       </div>
