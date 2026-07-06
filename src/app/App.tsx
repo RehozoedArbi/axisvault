@@ -47,7 +47,7 @@ const getCat = id => CATS.find(c=>c.id===id)||CATS[0];
 const STRINGS = {
   en:{
     appName:"AxisVault", tagline:"Lock in. Level up.",
-    loginH:"Set goals you can't walk away from.",
+    loginH:"Set goal you can't walk away from.",
     loginSub:"Write a commitment, lock it with a deadline. When the vault opens, there's no hiding — just a record of who you are.",
     google:"Continue with Google", signingIn:"Signing in…",
     terms:"By continuing you agree to our Terms & Privacy Policy.", loginErr:"Sign-in failed. Try again.",

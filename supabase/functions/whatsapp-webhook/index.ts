@@ -28,7 +28,7 @@ const WEBHOOK_SECRET        = Deno.env.get("WEBHOOK_SECRET") ?? "";
 const VERCEL_TOKEN          = Deno.env.get("VERCEL_TOKEN")!;
 const VERCEL_PROJECT_ID     = Deno.env.get("VERCEL_PROJECT_ID")!;
 const VERCEL_APP_URL        = Deno.env.get("VERCEL_APP_URL")!;
-const GITHUB_WEBHOOK_SECRET = Deno.env.get("GITHUB_WEBHOOK_SECRET")!;
+const GITHUB_WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET")!;
 const SUPABASE_URL          = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const TWILIO_ACCOUNT_SID    = Deno.env.get("TWILIO_ACCOUNT_SID")!;
@@ -109,6 +109,10 @@ function twilioReply(message: string): Response {
 
 // ─── Twilio outbound send (used for proactive push notifications) ────────────
 async function sendWhatsAppOutbound(message: string) {
+  const toNumber = MY_WHATSAPP_NUMBER.startsWith("whatsapp:")
+    ? MY_WHATSAPP_NUMBER
+    : `whatsapp:${MY_WHATSAPP_NUMBER}`;
+
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
   const auth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
 
@@ -120,7 +124,7 @@ async function sendWhatsAppOutbound(message: string) {
     },
     body: new URLSearchParams({
       From: TWILIO_WHATSAPP_FROM,
-      To: MY_WHATSAPP_NUMBER,
+      To: toNumber,
       Body: message,
     }),
   });
@@ -153,6 +157,7 @@ async function logCommand(
 async function runStatus(supabase: ReturnType<typeof createClient>): Promise<string> {
   const lines: string[] = [];
 
+  // 1. Ping the Vercel app
   const pingStart = Date.now();
   try {
     const res = await fetch(VERCEL_APP_URL, {
@@ -165,6 +170,7 @@ async function runStatus(supabase: ReturnType<typeof createClient>): Promise<str
     lines.push(`🌐 App: ❌ Unreachable`);
   }
 
+  // 2. Last Vercel deployment
   try {
     const deployRes = await fetch(
       `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=1`,
@@ -185,28 +191,15 @@ async function runStatus(supabase: ReturnType<typeof createClient>): Promise<str
     lines.push(`🚀 Deploy: ❓ Could not fetch`);
   }
 
-  try {
-    const { count: locked } = await supabase
-      .from("vaults")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "locked");
-
-    const { count: unlocked } = await supabase
-      .from("vaults")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "unlocked");
-
-    lines.push(`🔒 Active vaults: ${locked ?? "?"}`);
-    lines.push(`🔓 Awaiting response: ${unlocked ?? "?"}`);
-  } catch {
-    lines.push(`🔒 Supabase: ❓ Could not fetch`);
-  }
+  // 3. Site link
+  lines.push(`🔗 Site: ${VERCEL_APP_URL}`);
 
   return `📊 *AxisVault Status*\n${lines.join("\n")}`;
 }
 
 // ─── RESTART command ──────────────────────────────────────────────────────────
 async function runRestart(): Promise<string> {
+  // Get the latest deployment
   const listRes = await fetch(
     `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=1`,
     { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
@@ -216,6 +209,7 @@ async function runRestart(): Promise<string> {
 
   if (!latest) throw new Error("No deployment found to redeploy.");
 
+  // Redeploy it
   const redeployRes = await fetch("https://api.vercel.com/v13/deployments", {
     method: "POST",
     headers: {
@@ -239,6 +233,7 @@ async function runRestart(): Promise<string> {
 
 // ─── ROLLBACK command ─────────────────────────────────────────────────────────
 async function runRollback(): Promise<string> {
+  // Fetch last 5 READY deployments
   const listRes = await fetch(
     `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=5&state=READY`,
     { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
@@ -250,10 +245,11 @@ async function runRollback(): Promise<string> {
     return `⚠️ *Rollback not possible*\n\nNo previous deployment found.`;
   }
 
-  const previous = deployments[1];
+  const previous = deployments[1]; // index 0 = current, index 1 = previous
   const ago = Math.round((Date.now() - previous.createdAt) / 60000);
   const agoStr = ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`;
 
+  // Promote previous deployment to production
   const promoteRes = await fetch(
     `https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/promote/${previous.uid}`,
     {
