@@ -3,23 +3,14 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import nodemailer from "https://esm.sh/nodemailer@6.9.13"; // Utilisation de nodemailer stable
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CRON_SECRET = Deno.env.get("CRON_SECRET")!;
 
-const GMAIL_USER = Deno.env.get("GMAIL_USER")!;
-const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
-
-// Configuration du transporteur Nodemailer pour Gmail
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: GMAIL_USER,
-    pass: GMAIL_APP_PASSWORD,
-  },
-});
+// Plus besoin de Nodemailer ou de SDK, juste la clé API de Brevo
+const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY")!;
+const SENDER_EMAIL = Deno.env.get("GMAIL_USER")!; // Ton adresse email d'expéditeur validée sur Brevo
 
 serve(async (req) => {
   // ─── Security: verify cron secret ─────────────────────────────────────────
@@ -96,13 +87,26 @@ serve(async (req) => {
         </html>
       `;
 
-      // ─── 4. Envoi via Nodemailer ──────────────────────────────────────────
-      await transporter.sendMail({
-        from: `"AxisVault" <${GMAIL_USER}>`,
-        to: vault.email,
-        subject: "🔓 Your vault is open — time to face it.",
-        html: emailHtml,
+      // ─── 4. Envoi via l'API REST HTTP de Brevo ───────────────────────────
+      const brevoResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "accept": "application/json",
+          "api-key": BREVO_API_KEY,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          sender: { name: "AxisVault", email: SENDER_EMAIL },
+          to: [{ email: vault.email }],
+          subject: "🔓 Your vault is open — time to face it.",
+          htmlContent: emailHtml,
+        }),
       });
+
+      if (!brevoResponse.ok) {
+        const errorData = await brevoResponse.json();
+        throw new Error(`Brevo API Error: ${JSON.stringify(errorData)}`);
+      }
 
       processed++;
     } catch (err) {

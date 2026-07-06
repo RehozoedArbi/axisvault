@@ -1,243 +1,212 @@
-// AxisVault — Full Application
-// Stack: React + Vite + Supabase (Auth + Postgres)
-// Features:
-//   - Google OAuth via Supabase Auth
-//   - Bilingual EN/FR
-//   - Vault categories (Health, Career, Love, Finance, Personal)
-//   - Secret mode: content hidden until unlock
-//   - Streak tracker
-//   - New splash: vault dial animation
-//   - Supabase Edge Function triggers (check-vaults cron via GitHub Actions)
-//   - RLS: vaults are immutable from client after creation
-
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
-
-// ─── Supabase client ──────────────────────────────────────────────────────────
+import React from 'react'; // Make sure this line exists!
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// ─── i18n ─────────────────────────────────────────────────────────────────────
+// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const T = {
-  en: {
-    appName: "AxisVault",
-    tagline: "Lock in. Level up.",
-    loginTitle: "Set your goals.",
-    loginHighlight: "Lock them in.",
-    loginSub: "Become the best version of yourself.\nOne committed goal at a time.",
-    continueGoogle: "Continue with Google",
-    signingIn: "Signing in…",
-    terms: "By continuing, you agree to our Terms & Privacy Policy.",
-    whatWillYou: "What will you",
-    lockInToday: "lock in today?",
-    inputSub: "Write your goal. Set a deadline. Commit — and it becomes irreversible.",
-    placeholder: "What is your next big challenge?",
-    deadline: "Deadline:",
-    lockVault: "LOCK VAULT",
-    viewGoals: "Goals",
-    signOut: "Sign out",
-    welcomeBack: "Welcome back",
-    active: "Active",
-    unlocked: "Unlocked",
-    completed: "Completed",
-    failed: "Failed",
-    successRate: "Success rate",
-    streak: "day streak 🔥",
-    yourGoals: "Your Vaults",
-    newGoal: "+ New Vault",
-    noGoals: "No vaults locked yet. Start your first one.",
-    irreversible: "This is irreversible.",
-    irreversibleSub: "Once locked, this vault cannot be edited or deleted until your deadline passes.",
-    typeCommit: "Type",
-    toConfirm: "to confirm:",
-    cancel: "Cancel",
-    lockItIn: "Lock It In",
-    saving: "Saving…",
-    unlocks: "Unlocks:",
-    locked: "Locked",
-    timeIsUp: "Time is up",
-    achieved: "Achieved",
-    notThisTime: "Not this time",
-    didYouAchieve: "Did you achieve this goal?",
-    yesIdidIt: "✨ Yes, I did it!",
-    iFellShort: "I fell short",
-    elapsed: "elapsed",
-    days: "days",
-    hrs: "hrs",
-    min: "min",
-    sec: "sec",
-    category: "Category:",
-    secretMode: "Secret mode",
-    secretHint: "Content hidden until unlocked",
-    hiddenContent: "Content revealed on unlock",
-    categories: {
-      personal: "Personal",
-      career: "Career",
-      health: "Health",
-      finance: "Finance",
-      love: "Love",
-    },
-    congrats: [
-      "Every great achievement was once considered impossible. You proved them wrong.",
-      "You set the standard. Now raise it again.",
-      "Discipline is choosing between what you want now and what you want most.",
-      "The vault is open. The next one awaits.",
-      "Champions do what others won't. You just proved you are one.",
-    ],
-    encourage: [
-      "Every miss is data. The vault doesn't judge — it waits.",
-      "You showed up. That's already more than most. Lock a new one.",
-      "Failure is just a locked door you haven't found the key for yet.",
-      "The strongest vaults take the most attempts. Reset and go again.",
-      "Not this time — but you're still here. That's the whole game.",
-    ],
-    loginError: "Sign-in failed. Please try again.",
-  },
-  fr: {
-    appName: "AxisVault",
-    tagline: "Verrouille. Évolue.",
-    loginTitle: "Fixe tes objectifs.",
-    loginHighlight: "Verrouille-les.",
-    loginSub: "Deviens la meilleure version de toi-même.\nUn engagement à la fois.",
-    continueGoogle: "Continuer avec Google",
-    signingIn: "Connexion…",
-    terms: "En continuant, tu acceptes nos Conditions & Politique de confidentialité.",
-    whatWillYou: "Qu'est-ce que tu vas",
-    lockInToday: "verrouiller aujourd'hui ?",
-    inputSub: "Écris ton objectif. Fixe une deadline. Engage-toi — c'est irréversible.",
-    placeholder: "Quel est ton prochain grand défi ?",
-    deadline: "Deadline :",
-    lockVault: "VERROUILLER",
-    viewGoals: "Coffres",
-    signOut: "Déconnexion",
-    welcomeBack: "Bon retour",
-    active: "Actifs",
-    unlocked: "Ouverts",
-    completed: "Réussis",
-    failed: "Échoués",
-    successRate: "Taux de réussite",
-    streak: "jours de suite 🔥",
-    yourGoals: "Mes Coffres",
-    newGoal: "+ Nouveau Coffre",
-    noGoals: "Aucun coffre verrouillé. Lance-toi !",
-    irreversible: "C'est irréversible.",
-    irreversibleSub: "Une fois verrouillé, ce coffre ne peut être ni modifié ni supprimé jusqu'à la deadline.",
-    typeCommit: "Tape",
-    toConfirm: "pour confirmer :",
-    cancel: "Annuler",
-    lockItIn: "Verrouiller",
-    saving: "Sauvegarde…",
-    unlocks: "S'ouvre le :",
-    locked: "Verrouillé",
-    timeIsUp: "Temps écoulé",
-    achieved: "Accompli",
-    notThisTime: "Pas cette fois",
-    didYouAchieve: "As-tu atteint cet objectif ?",
-    yesIdidIt: "✨ Oui, je l'ai fait !",
-    iFellShort: "Je n'y suis pas arrivé",
-    elapsed: "écoulé",
-    days: "j",
-    hrs: "h",
-    min: "min",
-    sec: "sec",
-    category: "Catégorie :",
-    secretMode: "Mode secret",
-    secretHint: "Contenu masqué jusqu'à l'ouverture",
-    hiddenContent: "Contenu révélé à l'ouverture",
-    categories: {
-      personal: "Personnel",
-      career: "Carrière",
-      health: "Santé",
-      finance: "Finance",
-      love: "Amour",
-    },
-    congrats: [
-      "Chaque grand succès était autrefois impossible. Tu viens de le prouver.",
-      "Tu as fixé la barre. Maintenant relève-la encore.",
-      "La discipline, c'est choisir ce que tu veux le plus plutôt que ce que tu veux maintenant.",
-      "Le coffre est ouvert. Le prochain t'attend.",
-      "Les champions font ce que les autres ne font pas. Tu viens de le prouver.",
-    ],
-    encourage: [
-      "Chaque raté est une donnée. Le coffre ne juge pas — il attend.",
-      "Tu t'es présenté. C'est déjà plus que la plupart. Verrouilles-en un nouveau.",
-      "L'échec, c'est juste une porte fermée dont tu n'as pas encore trouvé la clé.",
-      "Les coffres les plus solides demandent le plus d'essais. Recommence.",
-      "Pas cette fois — mais tu es encore là. C'est tout le jeu.",
-    ],
-    loginError: "Connexion échouée. Réessaie.",
-  },
+  bg:        "#0F172A",
+  surface:   "#1E293B",
+  surfaceEl: "#273449",
+  surfaceHi: "#2D3D52",
+  border:    "rgba(148,163,184,0.08)",
+  borderMd:  "rgba(148,163,184,0.14)",
+  borderHi:  "rgba(148,163,184,0.22)",
+  violet:    "#8B5CF6",
+  blue:      "#3B82F6",
+  violetDim: "rgba(139,92,246,0.12)",
+  violetMid: "rgba(139,92,246,0.25)",
+  grad:      "linear-gradient(135deg,#8B5CF6 0%,#3B82F6 100%)",
+  green:     "#34D399",
+  greenDim:  "rgba(52,211,153,0.10)",
+  red:       "#F87171",
+  redDim:    "rgba(248,113,113,0.10)",
+  amber:     "#F59E0B",
+  tx1: "#F1F5F9",
+  tx2: "#94A3B8",
+  tx3: "#475569",
 };
 
-// ─── Category config ──────────────────────────────────────────────────────────
-const CATEGORIES = [
-  { id: "personal", emoji: "⭐", color: "#8B5CF6" },
-  { id: "career",   emoji: "💼", color: "#3B82F6" },
-  { id: "health",   emoji: "💪", color: "#34D399" },
-  { id: "finance",  emoji: "💰", color: "#F59E0B" },
-  { id: "love",     emoji: "❤️", color: "#F43F5E" },
+const FONT_DISPLAY = "'Plus Jakarta Sans','Inter',system-ui,sans-serif";
+const FONT_BODY    = "'Plus Jakarta Sans','Inter',system-ui,sans-serif";
+
+// ─── CATEGORIES ───────────────────────────────────────────────────────────────
+const CATS = [
+  { id:"personal", symbol:"◈", color:"#9B8CF8", en:"Personal",  fr:"Personnel" },
+  { id:"career",   symbol:"◆", color:"#4A90E2", en:"Career",    fr:"Carrière"  },
+  { id:"health",   symbol:"◉", color:"#34D399", en:"Health",    fr:"Santé"     },
+  { id:"finance",  symbol:"◎", color:"#F59E0B", en:"Finance",   fr:"Finance"   },
+  { id:"love",     symbol:"♥", color:"#F472B6", en:"Love",      fr:"Amour"     },
 ];
+const getCat = id => CATS.find(c=>c.id===id)||CATS[0];
 
-function getCat(id) {
-  return CATEGORIES.find((c) => c.id === id) || CATEGORIES[0];
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+const STRINGS = {
+  en:{
+    appName:"AxisVault", tagline:"Lock in. Level up.",
+    loginH:"Set goals you can't walk away from.",
+    loginSub:"Write a commitment, lock it with a deadline. When the vault opens, there's no hiding — just a record of who you are.",
+    google:"Continue with Google", signingIn:"Signing in…",
+    terms:"By continuing you agree to our Terms & Privacy Policy.", loginErr:"Sign-in failed. Try again.",
+    welcomeBack:"Welcome back", streak:"day streak",
+    hero1:"What will you lock in", hero2:"today?",
+    inputSub:"Write it clearly. Set a deadline. Once locked, it cannot change.",
+    placeholder:"Describe your commitment…", deadline:"Deadline",
+    lockVault:"Lock vault", viewVaults:"Vaults", signOut:"Sign out", category:"Category",
+    irrevTitle:"This cannot be undone.",
+    irrevSub:"Once locked, this vault is permanent. It opens on your deadline and asks for an answer.",
+    typeCommit:"Type", toConfirm:"to confirm", cancel:"Cancel", lockItIn:"Lock it in", saving:"Locking…",
+    unlocks:"Opens", locked:"Locked", timeIsUp:"Vault open", achieved:"Delivered", missed:"Missed",
+    didYouAchieve:"Did you deliver on this commitment?",
+    yes:"Yes, I delivered", no:"I fell short",
+    addNote:"Add a reflection (optional)…",
+    graceTitle:"Grace period active",
+    graceSub:"Your deadline has passed. The vault will open automatically within the next 1 to 5 minutes once the server processes the transition. Sit tight.",
+    elapsed:"elapsed", d:"d", h:"h", m:"m", s:"s",
+    pinned:"Pinned", pin:"Pin", unpin:"Unpin",
+    all:"All", active:"Active", open:"Open", done:"Done", missed_f:"Missed",
+    noVaults:"No vaults yet. Lock your first commitment.", noFiltered:"Nothing here.",
+    yourVaults:"Your vaults", newVault:"New vault",
+    successRate:"Success rate", sortBy:"Sort", newest:"Newest", deadline_s:"Deadline",
+    cats:{personal:"Personal",career:"Career",health:"Health",finance:"Finance",love:"Love"},
+    congrats:["Every great achievement was once considered impossible. You proved them wrong.","You set the standard. Now raise it.","Discipline is choosing what you want most over what you want now.","The vault is open. The next one awaits.","Champions do what others won't. You just proved you're one."],
+    encourage:["Every miss is data. The vault doesn't judge — it waits.","You showed up. That's more than most. Lock a new one.","Failure is a locked door you haven't found the key for yet.","The strongest commitments take the most attempts. Reset.","Not this time — but you're still here. That's the game."],
+    toastLocked:"Vault locked 🔒", toastDelivered:"Commitment delivered ✓", toastMissed:"Marked as missed",
+    signOutConfirmTitle:"Sign out?",
+    signOutConfirmMsg:"You'll need to sign back in to access your vaults.",
+    signOutConfirmYes:"Sign out", signOutConfirmNo:"Stay",
+    menu:"Menu",
+  },
+  fr:{
+    appName:"AxisVault", tagline:"Engage. Verrouille. Livre.",
+    loginH:"Des objectifs dont tu ne peux pas te défiler.",
+    loginSub:"Écris un engagement, verrouille-le avec une deadline. Quand le coffre s'ouvre, il n'y a plus de cachette — juste un bilan.",
+    google:"Continuer avec Google", signingIn:"Connexion…",
+    terms:"En continuant, tu acceptes nos Conditions & Politique de confidentialité.", loginErr:"Connexion échouée. Réessaie.",
+    welcomeBack:"Bon retour", streak:"jours de suite",
+    hero1:"Qu'est-ce que tu vas", hero2:"verrouiller aujourd'hui ?",
+    inputSub:"Écris-le clairement. Fixe une deadline. Une fois verrouillé, plus de retour.",
+    placeholder:"Décris ton engagement…", deadline:"Deadline",
+    lockVault:"Verrouiller", viewVaults:"Coffres", signOut:"Déconnexion", category:"Catégorie",
+    irrevTitle:"C'est irréversible.",
+    irrevSub:"Une fois verrouillé, ce coffre est permanent. Il s'ouvre à la deadline et demande une réponse.",
+    typeCommit:"Tape", toConfirm:"pour confirmer", cancel:"Annuler", lockItIn:"Verrouiller", saving:"Verrouillage…",
+    unlocks:"S'ouvre le", locked:"Verrouillé", timeIsUp:"Coffre ouvert", achieved:"Livré", missed:"Raté",
+    didYouAchieve:"As-tu tenu cet engagement ?",
+    yes:"Oui, j'ai livré", no:"Je n'y suis pas arrivé",
+    addNote:"Ajoute une réflexion (optionnel)…",
+    graceTitle:"Période de grâce active",
+    graceSub:"Ta deadline est passée. Le coffre s'ouvrira automatiquement dans 1 à 5 minutes, le temps que le serveur traite la transition. Patiente.",
+    elapsed:"écoulé", d:"j", h:"h", m:"m", s:"s",
+    pinned:"Épinglé", pin:"Épingler", unpin:"Désépingler",
+    all:"Tous", active:"Actifs", open:"Ouverts", done:"Réussis", missed_f:"Ratés",
+    noVaults:"Aucun coffre. Verrouille ton premier engagement.", noFiltered:"Rien ici.",
+    yourVaults:"Mes coffres", newVault:"Nouveau coffre",
+    successRate:"Taux de réussite", sortBy:"Trier", newest:"Récents", deadline_s:"Deadline",
+    cats:{personal:"Personnel",career:"Carrière",health:"Santé",finance:"Finance",love:"Amour"},
+    congrats:["Chaque grand succès était autrefois impossible. Tu viens de le prouver.","Tu as fixé la barre. Maintenant relève-la.","La discipline, c'est choisir ce que tu veux le plus.","Le coffre est ouvert. Le prochain t'attend.","Les champions font ce que les autres ne font pas. Tu viens de le prouver."],
+    encourage:["Chaque raté est une donnée. Le coffre ne juge pas — il attend.","Tu t'es présenté. C'est plus que la plupart. Verrouilles-en un nouveau.","L'échec, c'est juste une porte fermée dont tu n'as pas encore trouvé la clé.","Les coffres les plus solides demandent le plus d'essais. Recommence.","Pas cette fois — mais tu es encore là. C'est tout le jeu."],
+    toastLocked:"Coffre verrouillé 🔒", toastDelivered:"Engagement livré ✓", toastMissed:"Marqué comme raté",
+    signOutConfirmTitle:"Se déconnecter ?",
+    signOutConfirmMsg:"Tu devras te reconnecter pour accéder à tes coffres.",
+    signOutConfirmYes:"Déconnexion", signOutConfirmNo:"Rester",
+    menu:"Menu",
+  },
+};
+const useT = lang => STRINGS[lang]||STRINGS.en;
+
+// ─── RESPONSIVE HOOK ─────────────────────────────────────────────────────────
+function useBreakpoint() {
+  const [w, setW] = useState(window.innerWidth);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return { isMobile: w < 640, isTablet: w < 1024, width: w };
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
-function formatCountdown(ms) {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  return {
-    days: Math.floor(s / 86400),
-    hours: Math.floor((s % 86400) / 3600),
-    minutes: Math.floor((s % 3600) / 60),
-    seconds: s % 60,
-  };
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+const ToastCtx = createContext(null);
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const add = useCallback((msg, type="info") => {
+    const id = Date.now();
+    setToasts(p=>[...p,{id,msg,type}]);
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)), 3200);
+  },[]);
+  return (
+    <ToastCtx.Provider value={add}>
+      {children}
+      <div style={{position:"fixed",bottom:24,right:16,zIndex:999,display:"flex",flexDirection:"column",gap:8,pointerEvents:"none",maxWidth:320}}>
+        {toasts.map(t=>(
+          <div key={t.id} style={{
+            padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,fontFamily:FONT_BODY,
+            background: t.type==="success"?T.green:t.type==="error"?T.red:T.surfaceHi,
+            color:(t.type==="success"||t.type==="error")?"#fff":T.tx1,
+            border:`1px solid ${t.type==="success"?"rgba(52,211,153,0.3)":t.type==="error"?"rgba(248,113,113,0.3)":T.borderMd}`,
+            boxShadow:"0 8px 32px rgba(0,0,0,0.5)",
+            animation:"toastIn .25s cubic-bezier(0.34,1.4,0.64,1)",
+            pointerEvents:"none",
+          }}>{t.msg}</div>
+        ))}
+      </div>
+    </ToastCtx.Provider>
+  );
+}
+const useToast = () => useContext(ToastCtx);
+
+// ─── SIGN OUT CONFIRM MODAL ──────────────────────────────────────────────────
+function SignOutModal({ onConfirm, onCancel, lang }) {
+  const t = useT(lang);
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:"rgba(15,23,42,0.88)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",animation:"fadeIn .18s ease"}}>
+      <div style={{background:T.surface,border:`1px solid ${T.borderMd}`,borderRadius:18,padding:"28px 26px",maxWidth:360,width:"100%",boxShadow:"0 40px 80px rgba(0,0,0,0.65)",animation:"scaleIn .22s cubic-bezier(0.34,1.3,0.64,1)",fontFamily:FONT_BODY}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:16}}>
+          <div style={{width:44,height:44,borderRadius:12,background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🚪</div>
+        </div>
+        <h2 style={{fontSize:17,fontWeight:800,color:T.tx1,textAlign:"center",marginBottom:8,letterSpacing:"-.02em"}}>{t.signOutConfirmTitle}</h2>
+        <p style={{fontSize:13,color:T.tx2,textAlign:"center",lineHeight:1.6,marginBottom:22}}>{t.signOutConfirmMsg}</p>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onCancel} style={{flex:1,padding:"11px",borderRadius:10,background:"rgba(148,163,184,0.08)",border:`1px solid ${T.border}`,color:T.tx2,fontFamily:FONT_BODY,fontSize:14,fontWeight:600,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(148,163,184,0.13)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(148,163,184,0.08)"}>{t.signOutConfirmNo}</button>
+          <button onClick={onConfirm} style={{flex:1,padding:"11px",borderRadius:10,background:"rgba(248,113,113,0.15)",border:"1px solid rgba(248,113,113,0.25)",color:T.red,fontFamily:FONT_BODY,fontSize:14,fontWeight:700,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(248,113,113,0.22)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(248,113,113,0.15)"}>{t.signOutConfirmYes}</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function progressPercent(createdAt, unlockAt) {
-  const total = unlockAt - createdAt;
-  const elapsed = Date.now() - createdAt;
-  return Math.min(100, Math.max(0, (elapsed / total) * 100));
-}
-
-function calcStreak(goals) {
-  const completed = goals
-    .filter((g) => g.status === "completed" && g.responded_at)
-    .map((g) => new Date(g.responded_at).toDateString());
-  const unique = [...new Set(completed)].sort((a, b) => new Date(b) - new Date(a));
-  if (!unique.length) return 0;
-  let streak = 1;
-  for (let i = 1; i < unique.length; i++) {
-    const prev = new Date(unique[i - 1]);
-    const curr = new Date(unique[i]);
-    const diff = (prev - curr) / (1000 * 60 * 60 * 24);
-    if (Math.round(diff) === 1) streak++;
-    else break;
-  }
-  return streak;
-}
-
-// ─── Supabase helpers ─────────────────────────────────────────────────────────
+// ─── SUPABASE HELPERS ─────────────────────────────────────────────────────────
 async function signInWithGoogle() {
-  return supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: window.location.origin },
-  });
+  return supabase.auth.signInWithOAuth({ provider:"google", options:{ redirectTo:window.location.origin } });
 }
-
-async function signOutUser() {
-  return supabase.auth.signOut();
+async function fetchVaults(uid) {
+  const { data } = await supabase.from("vaults").select("*").eq("uid",uid).order("created_at",{ascending:false});
+  return data||[];
 }
-
-async function createVault({ uid, email, text, deadlineDate, deadlineTime, category, secret }) {
+function watchVaults(uid, cb) {
+  const ch = supabase
+    .channel("vaults-" + uid)
+    .on("postgres_changes",{event:"*",schema:"public",table:"vaults",filter:`uid=eq.${uid}`},
+      () => { fetchVaults(uid).then(cb); })
+    .subscribe((status, err) => {
+      console.log("[realtime]", status, err||"");
+    });
+  fetchVaults(uid).then(cb);
+  const pollId = setInterval(() => fetchVaults(uid).then(cb), 15000);
+  return () => { supabase.removeChannel(ch); clearInterval(pollId); };
+}
+async function createVault({ uid,email,text,deadlineDate,deadlineTime,category }) {
   const unlockAt = new Date(`${deadlineDate}T${deadlineTime}:00`).toISOString();
+  // ALL vaults are secret by design — content is always stored in secret_text
   return supabase.from("vaults").insert({
-    uid,
-    email,
-    text: secret ? null : text,        // secret vaults: text stored separately
-    secret_text: secret ? text : null, // only revealed after unlock by edge function
-    secret,
+    uid, email,
+    text: null,
+    secret_text: text,
+    secret: true,
     deadline_date: deadlineDate,
     deadline_time: deadlineTime,
     unlock_at: unlockAt,
@@ -248,1022 +217,1339 @@ async function createVault({ uid, email, text, deadlineDate, deadlineTime, categ
     feedback_message: null,
   });
 }
-
-// Client can ONLY update status from unlocked → completed/failed + feedback_message
-// RLS blocks any other update. The Edge Function uses service role key (bypasses RLS).
 async function respondToVault(vaultId, status, feedbackMessage) {
-  return supabase
-    .from("vaults")
-    .update({ status, feedback_message: feedbackMessage, responded_at: new Date().toISOString() })
-    .eq("id", vaultId)
-    .eq("status", "unlocked"); // RLS double-check: only allowed when unlocked
+  return supabase.from("vaults").update({
+    status, feedback_message: feedbackMessage, responded_at: new Date().toISOString()
+  }).eq("id",vaultId).eq("status","unlocked");
+}
+function getPins() { try { return JSON.parse(localStorage.getItem("av_pins")||"[]"); } catch { return []; } }
+function togglePin(id) {
+  const pins = getPins();
+  const next = pins.includes(id)?pins.filter(p=>p!==id):[...pins,id];
+  localStorage.setItem("av_pins", JSON.stringify(next));
+  return next;
 }
 
-function watchVaults(uid, cb) {
-  const channel = supabase
-    .channel("vaults-" + uid)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "vaults", filter: `uid=eq.${uid}` },
-      () => fetchVaults(uid).then(cb)
-    )
-    .subscribe();
-  fetchVaults(uid).then(cb);
-  return () => supabase.removeChannel(channel);
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function fmtCountdown(ms) {
+  const s = Math.max(0,Math.floor(ms/1000));
+  return { days:Math.floor(s/86400),hours:Math.floor((s%86400)/3600),minutes:Math.floor((s%3600)/60),seconds:s%60 };
+}
+function pct(createdAt,unlockAt) {
+  return Math.min(100,Math.max(0,((Date.now()-createdAt)/(unlockAt-createdAt))*100));
+}
+function streakCount(vaults) {
+  const days=[...new Set(
+    vaults.filter(v=>v.status==="completed"&&v.responded_at)
+      .map(v=>new Date(v.responded_at).toDateString())
+  )].sort((a,b)=>new Date(b)-new Date(a));
+  if(!days.length) return 0;
+  let s=1;
+  for(let i=1;i<days.length;i++){
+    if(Math.round((new Date(days[i-1])-new Date(days[i]))/86400000)===1) s++;
+    else break;
+  }
+  return s;
+}
+function fmtDate(d,t){
+  if(!d) return "";
+  try {
+    return new Date(`${d}T${t||"23:59"}:00`).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+" · "+(t||"23:59");
+  } catch { return `${d} ${t||""}`; }
 }
 
-async function fetchVaults(uid) {
-  const { data } = await supabase
-    .from("vaults")
-    .select("*")
-    .eq("uid", uid)
-    .order("created_at", { ascending: false });
-  return data || [];
+// ─── GLOBAL CSS ───────────────────────────────────────────────────────────────
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:${T.bg};color:${T.tx1};font-family:${FONT_BODY};-webkit-font-smoothing:antialiased;}
+::selection{background:rgba(139,92,246,.25);color:${T.tx1};}
+input,textarea,button{font-family:inherit;}
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.07);border-radius:2px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes slideUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+@keyframes scaleIn{from{opacity:0;transform:scale(0.94);}to{opacity:1;transform:scale(1);}}
+@keyframes cardIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+@keyframes toastIn{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:translateX(0);}}
+@keyframes vaultPulse{0%,100%{opacity:.7;transform:scale(1);}50%{opacity:1;transform:scale(1.08);}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+@keyframes gracePulse{0%,100%{opacity:.4;}50%{opacity:1;}}
+@keyframes vaultBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes menuSlide{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+@keyframes overlay{from{opacity:0;}to{opacity:1;}}
+
+.av-btn-primary{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px 20px;border-radius:9px;border:none;cursor:pointer;
+  background:${T.grad};color:#fff;font-weight:700;font-size:14px;
+  font-family:${FONT_DISPLAY};letter-spacing:-.01em;
+  box-shadow:0 4px 20px rgba(139,92,246,.35);
+  transition:opacity .15s,transform .15s,box-shadow .15s;
 }
+.av-btn-primary:hover:not(:disabled){opacity:.9;transform:translateY(-1px);box-shadow:0 8px 28px rgba(139,92,246,.45);}
+.av-btn-primary:active:not(:disabled){transform:translateY(0);}
+.av-btn-primary:disabled{opacity:.35;cursor:not-allowed;}
 
-// ─── VaultDial Splash ─────────────────────────────────────────────────────────
-// Signature animation: rotating combination dial → click → vault opens with golden light
+.av-btn-ghost{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:8px 14px;border-radius:8px;cursor:pointer;
+  background:transparent;border:1px solid ${T.border};
+  color:${T.tx2};font-size:13px;font-weight:500;
+  transition:border-color .15s,color .15s,background .15s;
+}
+.av-btn-ghost:hover{border-color:${T.borderMd};color:${T.tx1};background:rgba(255,255,255,.03);}
 
-function SplashScreen({ onComplete, lang }) {
-  const t = T[lang];
-  const [phase, setPhase] = useState(0);
-  // 0: mount  1: dial spins  2: click  3: cracks open  4: fade out
-  const [dialAngle, setDialAngle] = useState(0);
-  const [fadeOut, setFadeOut] = useState(false);
-  const rafRef = useRef(null);
-  const startRef = useRef(null);
+.av-input{
+  width:100%;background:transparent;border:none;resize:none;
+  font-family:${FONT_BODY};font-size:15px;color:${T.tx1};
+  line-height:1.7;padding:20px 22px;
+}
+.av-input::placeholder{color:${T.tx3};}
+.av-input:focus{outline:none;}
 
-  useEffect(() => {
-    // Phase 1: spin the dial for 2.2s
-    const t1 = setTimeout(() => {
-      setPhase(1);
-      startRef.current = performance.now();
-      const spin = (now) => {
-        const elapsed = now - startRef.current;
-        const progress = Math.min(1, elapsed / 2200);
-        // easeInOutQuart
-        const eased = progress < 0.5
-          ? 8 * progress ** 4
-          : 1 - (-2 * progress + 2) ** 4 / 2;
-        setDialAngle(eased * 1080); // 3 full turns
-        if (progress < 1) rafRef.current = requestAnimationFrame(spin);
-        else setPhase(2);
-      };
-      rafRef.current = requestAnimationFrame(spin);
-    }, 400);
+.av-date{
+  background:${T.surfaceEl};border:1px solid ${T.border};
+  border-radius:8px;padding:7px 12px;
+  font-family:${FONT_BODY};font-size:13px;color:${T.tx1};
+  color-scheme:dark;outline:none;transition:border-color .15s;
+}
+.av-date:focus{border-color:rgba(139,92,246,.5);}
 
-    // Phase 3: vault cracks
-    const t3 = setTimeout(() => setPhase(3), 3200);
-    // Phase 4: fade out
-    const t4 = setTimeout(() => setFadeOut(true), 4200);
-    const t5 = setTimeout(() => onComplete(), 4700);
+.av-modal-bg{
+  position:fixed;inset:0;z-index:500;
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  background:rgba(15,23,42,.88);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  animation:fadeIn .18s ease;
+}
+.av-modal{
+  background:${T.surface};border:1px solid ${T.borderMd};
+  border-radius:20px;padding:32px 28px;max-width:440px;width:100%;
+  box-shadow:0 40px 80px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.04);
+  animation:scaleIn .22s cubic-bezier(0.34,1.3,0.64,1);
+}
+.av-commit-input{
+  width:100%;padding:12px 16px;border-radius:9px;
+  background:${T.surfaceEl};border:1.5px solid ${T.border};
+  font-family:${FONT_DISPLAY};font-size:14px;font-weight:700;
+  color:${T.tx1};letter-spacing:.1em;outline:none;
+  transition:border-color .2s;box-sizing:border-box;
+}
+.av-commit-input.valid{border-color:rgba(139,92,246,.6);}
+.av-commit-input.shake{animation:shake .35s ease;}
 
-    return () => {
-      [t1, t3, t4, t5].forEach(clearTimeout);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [onComplete]);
+.av-tab{
+  padding:5px 14px;border-radius:20px;cursor:pointer;
+  font-size:12px;font-weight:600;border:1px solid transparent;
+  transition:all .15s;white-space:nowrap;
+}
+.av-tab.on{background:rgba(139,92,246,.1);border-color:rgba(139,92,246,.3);color:${T.violet};}
+.av-tab.off{background:transparent;border-color:${T.border};color:${T.tx2};}
+.av-tab.off:hover{border-color:${T.borderMd};color:${T.tx1};}
 
-  const isOpen = phase >= 3;
+.av-lang{
+  padding:4px 10px;border-radius:6px;cursor:pointer;
+  font-size:11px;font-weight:700;letter-spacing:.1em;
+  border:1px solid transparent;transition:all .15s;
+}
+.av-lang.on{background:rgba(139,92,246,.1);border-color:rgba(139,92,246,.3);color:${T.violet};}
+.av-lang.off{border-color:${T.border};color:${T.tx3};}
+.av-lang.off:hover{color:${T.tx2};}
 
+.chip{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:20px;
+  font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+}
+.pbar{height:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;}
+.pfill{height:100%;border-radius:2px;transition:width 1s linear;}
+
+/* Mobile bottom nav */
+.av-bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;
+  background:rgba(15,23,42,0.95);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid ${T.border};
+  display:flex;align-items:center;justify-content:space-around;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+  z-index:200;
+}
+.av-bottom-nav-item{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  cursor:pointer;background:none;border:none;
+  color:${T.tx3};font-size:10px;font-weight:600;
+  transition:color .15s;padding:4px 12px;border-radius:8px;
+  letter-spacing:.04em;text-transform:uppercase;
+}
+.av-bottom-nav-item.active{color:${T.violet};}
+
+/* Burger menu dropdown */
+.av-burger-menu{
+  position:absolute;top:calc(100% + 8px);right:0;
+  background:${T.surface};border:1px solid ${T.borderMd};
+  border-radius:14px;padding:8px;min-width:180px;
+  box-shadow:0 16px 48px rgba(0,0,0,.5);
+  animation:menuSlide .18s ease;z-index:400;
+}
+.av-burger-item{
+  display:flex;align-items:center;gap:10px;
+  width:100%;padding:10px 12px;border-radius:9px;
+  background:none;border:none;cursor:pointer;
+  color:${T.tx2};font-size:13px;font-weight:500;
+  transition:background .12s,color .12s;text-align:left;
+}
+.av-burger-item:hover{background:rgba(255,255,255,.04);color:${T.tx1};}
+.av-burger-divider{height:1px;background:${T.border};margin:4px 8px;}
+`;
+
+// ─── VAULT ICON ───────────────────────────────────────────────────────────────
+function VaultIcon({ cracked=false, size=80 }) {
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0,
-        background: "#070D1A",
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        transition: "opacity 0.5s ease",
-        opacity: fadeOut ? 0 : 1,
-        overflow: "hidden",
-      }}
-    >
-      {/* Radial background glow */}
-      <div style={{
-        position: "absolute",
-        width: 500, height: 500,
-        borderRadius: "50%",
-        background: isOpen
-          ? "radial-gradient(circle, rgba(251,191,36,0.2) 0%, rgba(139,92,246,0.1) 40%, transparent 70%)"
-          : "radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)",
-        transition: "background 0.8s ease",
-        pointerEvents: "none",
-      }} />
-
-      {/* Vault body */}
-      <div style={{
-        position: "relative",
-        width: 160, height: 160,
-        transform: phase >= 1 ? "scale(1)" : "scale(0.5)",
-        opacity: phase >= 1 ? 1 : 0,
-        transition: "transform 0.6s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease",
-        marginBottom: 48,
-      }}>
-        <svg width="160" height="160" viewBox="0 0 160 160" fill="none">
-          <defs>
-            <linearGradient id="splashBody" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor={isOpen ? "#92400E" : "#4C1D95"} />
-              <stop offset="100%" stopColor={isOpen ? "#D97706" : "#1D4ED8"} />
-            </linearGradient>
-            <radialGradient id="goldGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#FCD34D" stopOpacity="0.9" />
-              <stop offset="60%" stopColor="#F59E0B" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
-            </radialGradient>
-            <filter id="splashShadow" x="-30%" y="-30%" width="160%" height="160%">
-              <feDropShadow dx="0" dy="8" stdDeviation="16"
-                floodColor={isOpen ? "#FCD34D" : "#8B5CF6"}
-                floodOpacity={isOpen ? "0.6" : "0.5"} />
-            </filter>
-          </defs>
-
-          {/* Gold burst behind vault when open */}
-          {isOpen && (
-            <ellipse cx="80" cy="84" rx="72" ry="72" fill="url(#goldGlow)"
-              style={{ animation: "goldPulse 1.5s ease-in-out infinite" }} />
-          )}
-
-          {/* Vault door */}
-          <rect
-            x={isOpen ? "16" : "16"} y="20"
-            width="128" height="120" rx="20"
-            fill="url(#splashBody)"
-            filter="url(#splashShadow)"
-            style={{
-              transform: isOpen ? "rotateY(-30deg)" : "rotateY(0deg)",
-              transformOrigin: "16px 80px",
-              transition: "transform 0.6s ease",
-            }}
-          />
-
-          {/* Surface sheen */}
-          <rect x="28" y="32" width="104" height="96" rx="14" fill="rgba(255,255,255,0.06)" />
-
-          {/* Light escaping from crack when open */}
-          {isOpen && (
-            <rect x="14" y="20" width="6" height="120" rx="3"
-              fill="#FCD34D" opacity="0.9"
-              style={{ animation: "lightPulse 1s ease-in-out infinite alternate" }}
-            />
-          )}
-
-          {/* Combination dial — rotates during phase 1 */}
-          <g transform={`translate(80, 80)`}>
-            {/* Outer ring */}
-            <circle r="38" stroke={isOpen ? "#D97706" : "rgba(167,139,250,0.6)"} strokeWidth="3"
-              fill="rgba(255,255,255,0.04)"
-              style={{ transition: "stroke 0.6s ease" }} />
-            {/* Inner ring */}
-            <circle r="28" stroke={isOpen ? "#F59E0B" : "rgba(139,92,246,0.4)"} strokeWidth="1.5"
-              fill="rgba(0,0,0,0.2)"
-              style={{ transition: "stroke 0.6s ease" }} />
-            {/* Center knob */}
-            <circle r="10" fill={isOpen ? "#D97706" : "#7C3AED"}
-              style={{ transition: "fill 0.6s ease" }} />
-            <circle r="4" fill={isOpen ? "#FCD34D" : "#A78BFA"}
-              style={{ transition: "fill 0.6s ease" }} />
-
-            {/* Spinning group */}
-            <g style={{ transform: `rotate(${dialAngle}deg)`, transformOrigin: "0 0", transition: phase === 2 ? "transform 0.3s ease" : "none" }}>
-              {/* Notch indicator */}
-              <line x1="0" y1="-38" x2="0" y2="-28"
-                stroke={isOpen ? "#FCD34D" : "#A78BFA"} strokeWidth="3" strokeLinecap="round" />
-              {/* Tick marks */}
-              {Array.from({ length: 12 }).map((_, i) => (
-                <line
-                  key={i}
-                  x1="0" y1="-32"
-                  x2="0" y2={i % 3 === 0 ? "-26" : "-29"}
-                  stroke={isOpen ? "rgba(253,211,77,0.5)" : "rgba(167,139,250,0.4)"}
-                  strokeWidth={i % 3 === 0 ? 2 : 1}
-                  strokeLinecap="round"
-                  style={{ transform: `rotate(${i * 30}deg)`, transformOrigin: "0 0" }}
-                />
-              ))}
-              {/* Numbers around dial */}
-              {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((n, i) => {
-                const angle = (i * 30 - 90) * (Math.PI / 180);
-                return (
-                  <text key={n}
-                    x={Math.cos(angle) * 20}
-                    y={Math.sin(angle) * 20 + 4}
-                    fontSize="5" textAnchor="middle"
-                    fill={isOpen ? "rgba(253,211,77,0.7)" : "rgba(167,139,250,0.6)"}
-                    style={{ fontFamily: "monospace" }}>
-                    {n}
-                  </text>
-                );
-              })}
-            </g>
-          </g>
-
-          {/* Handle */}
-          <rect x="112" y="72" width="24" height="16" rx="6"
-            fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-
-          {/* Hinge bolts */}
-          <circle cx="24" cy="44" r="6" fill="rgba(255,255,255,0.1)" />
-          <circle cx="24" cy="116" r="6" fill="rgba(255,255,255,0.1)" />
-
-          {/* Crack lines when open */}
-          {isOpen && (
-            <>
-              <line x1="80" y1="20" x2="88" y2="50" stroke="#FCD34D" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
-              <line x1="88" y1="50" x2="76" y2="70" stroke="#34D399" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
-              <line x1="76" y1="70" x2="84" y2="90" stroke="#FCD34D" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-            </>
-          )}
-        </svg>
-
-        {/* Phase indicator: "click" pulse when dial stops spinning */}
-        {phase === 2 && (
-          <div style={{
-            position: "absolute", bottom: -16, left: "50%",
-            transform: "translateX(-50%)",
-            fontSize: 11, color: "#8B5CF6",
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
-            letterSpacing: "0.15em", textTransform: "uppercase",
-            animation: "blink 1s ease-in-out infinite",
-          }}>
-            ▸ CLICK
-          </div>
-        )}
-      </div>
-
-      {/* App name */}
-      <div style={{
-        textAlign: "center",
-        opacity: phase >= 1 ? 1 : 0,
-        transform: phase >= 1 ? "translateY(0)" : "translateY(16px)",
-        transition: "all 0.6s ease 0.3s",
-        position: "relative", zIndex: 1,
-      }}>
-        <div style={{
-          fontFamily: "'Plus Jakarta Sans', sans-serif",
-          fontSize: 36, fontWeight: 800,
-          color: isOpen ? "#FCD34D" : "#F1F5F9",
-          letterSpacing: "-0.02em",
-          transition: "color 0.6s ease",
-        }}>
-          {t.appName}
-        </div>
-        <div style={{
-          fontFamily: "'Plus Jakarta Sans', sans-serif",
-          fontSize: 13, fontWeight: 400,
-          color: isOpen ? "rgba(253,211,77,0.7)" : "#475569",
-          marginTop: 6, letterSpacing: "0.12em", textTransform: "uppercase",
-          transition: "color 0.6s ease",
-        }}>
-          {t.tagline}
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes goldPulse {
-          0%,100% { opacity: 0.7; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.08); }
-        }
-        @keyframes lightPulse {
-          from { opacity: 0.7; }
-          to { opacity: 1; }
-        }
-        @keyframes blink {
-          0%,100% { opacity: 0.3; }
-          50% { opacity: 1; }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-// ─── Login Screen ─────────────────────────────────────────────────────────────
-function LoginScreen({ onLoginSuccess, lang, setLang }) {
-  const t = T[lang];
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const tm = setTimeout(() => setVisible(true), 60);
-    return () => clearTimeout(tm);
-  }, []);
-
-  const handleGoogle = async () => {
-    setLoading(true);
-    setError(null);
-    const { error: err } = await signInWithGoogle();
-    if (err) {
-      setError(t.loginError);
-      setLoading(false);
-    }
-    // Supabase redirects back → onAuthStateChange handles the rest
-  };
-
-  return (
-    <div style={{
-      position: "fixed", inset: 0,
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center", padding: "24px",
-      background: "#070D1A",
-      transition: "opacity 0.6s ease", opacity: visible ? 1 : 0,
-    }}>
-      {/* Ambient orbs */}
-      <div style={{ position: "absolute", top: "8%", left: "10%", width: 340, height: 340, borderRadius: "50%", background: "radial-gradient(circle, rgba(139,92,246,0.07) 0%, transparent 70%)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", bottom: "12%", right: "8%", width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, rgba(59,130,246,0.07) 0%, transparent 70%)", pointerEvents: "none" }} />
-
-      {/* Lang toggle */}
-      <div style={{ position: "absolute", top: 24, right: 24, display: "flex", gap: 4 }}>
-        {["en", "fr"].map((l) => (
-          <button key={l} onClick={() => setLang(l)}
-            style={{
-              padding: "4px 10px", borderRadius: 20,
-              background: lang === l ? "rgba(139,92,246,0.2)" : "transparent",
-              border: `1px solid ${lang === l ? "rgba(139,92,246,0.4)" : "rgba(148,163,184,0.12)"}`,
-              color: lang === l ? "#A78BFA" : "#475569",
-              fontSize: 12, fontWeight: 600, cursor: "pointer",
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
-              transition: "all 0.2s",
-            }}>
-            {l.toUpperCase()}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ maxWidth: 400, width: "100%", textAlign: "center", position: "relative", zIndex: 1 }}>
-        {/* Logo */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 40 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: 20,
-            background: "linear-gradient(135deg, #8B5CF6, #3B82F6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 0 48px rgba(139,92,246,0.4)",
-          }}>
-            <svg width="36" height="36" viewBox="0 0 80 80" fill="none">
-              <rect x="8" y="10" width="64" height="60" rx="10" fill="rgba(255,255,255,0.9)" />
-              <circle cx="40" cy="40" r="14" stroke="#8B5CF6" strokeWidth="2.5" fill="none" />
-              <circle cx="40" cy="40" r="5" fill="#8B5CF6" />
-              <line x1="40" y1="27" x2="40" y2="30" stroke="#8B5CF6" strokeWidth="1.5" strokeLinecap="round" />
-              <rect x="56" y="36" width="10" height="8" rx="3" fill="#64748B" />
-            </svg>
-          </div>
-        </div>
-
-        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#475569", marginBottom: 14 }}>
-          AxisVault
-        </div>
-
-        <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 30, fontWeight: 800, color: "#F1F5F9", lineHeight: 1.2, letterSpacing: "-0.02em", marginBottom: 14 }}>
-          {t.loginTitle}<br />
-          <span style={{ background: "linear-gradient(90deg, #34D399, #3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            {t.loginHighlight}
-          </span>
-        </h1>
-        <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, color: "#64748B", lineHeight: 1.7, marginBottom: 52, whiteSpace: "pre-line" }}>
-          {t.loginSub}
-        </p>
-
-        <button onClick={handleGoogle} disabled={loading}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
-            width: "100%", padding: "15px 24px", borderRadius: 9999,
-            background: "#ffffff", border: "none",
-            cursor: loading ? "not-allowed" : "pointer",
-            boxShadow: "0 4px 24px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.15)",
-            transition: "all 0.2s ease", opacity: loading ? 0.75 : 1,
-          }}
-          onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(0,0,0,0.35)"; } }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.3)"; }}>
-          {loading
-            ? <div style={{ width: 20, height: 20, border: "2.5px solid #E2E8F0", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
-            : <GoogleLogo />}
-          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 600, color: "#1E293B" }}>
-            {loading ? t.signingIn : t.continueGoogle}
-          </span>
-        </button>
-
-        {error && <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#F87171", marginTop: 16 }}>{error}</p>}
-
-        <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#334155", marginTop: 22 }}>{t.terms}</p>
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
-
-function GoogleLogo() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <path d="M19.6 10.227c0-.709-.064-1.39-.182-2.045H10v3.868h5.382a4.6 4.6 0 01-1.996 3.018v2.51h3.232c1.891-1.742 2.982-4.305 2.982-7.35z" fill="#4285F4" />
-      <path d="M10 20c2.7 0 4.964-.895 6.618-2.423l-3.232-2.509c-.895.6-2.04.955-3.386.955-2.605 0-4.81-1.759-5.595-4.123H1.064v2.59A9.996 9.996 0 0010 20z" fill="#34A853" />
-      <path d="M4.405 11.9A6.01 6.01 0 014.09 10c0-.662.114-1.305.314-1.9V5.51H1.063A9.996 9.996 0 000 10c0 1.614.386 3.141 1.064 4.491L4.405 11.9z" fill="#FBBC05" />
-      <path d="M10 3.977c1.468 0 2.786.505 3.823 1.496l2.868-2.868C14.959.99 12.695 0 10 0A9.996 9.996 0 001.064 5.51L4.405 8.1C5.19 5.736 7.395 3.977 10 3.977z" fill="#EA4335" />
+    <svg width={size} height={size} viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="vg-door" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#8B5CF6"/><stop offset="100%" stopColor="#3B82F6"/>
+        </linearGradient>
+        <linearGradient id="vg-dial" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#60A5FA"/>
+        </linearGradient>
+        <radialGradient id="vg-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#34D399" stopOpacity="0.6"/>
+          <stop offset="100%" stopColor="#34D399" stopOpacity="0"/>
+        </radialGradient>
+        <filter id="vg-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="4" stdDeviation="8" floodColor="#8B5CF6" floodOpacity="0.5"/>
+        </filter>
+      </defs>
+      {cracked&&<ellipse cx="40" cy="42" rx="36" ry="36" fill="url(#vg-glow)"/>}
+      <rect x="8" y="10" width="64" height="60" rx="10" fill="url(#vg-door)" filter="url(#vg-shadow)"/>
+      <rect x="14" y="16" width="52" height="48" rx="7" fill="rgba(255,255,255,0.06)"/>
+      <circle cx="40" cy="40" r="14" stroke="url(#vg-dial)" strokeWidth="2.5" fill="rgba(255,255,255,0.05)"/>
+      <circle cx="40" cy="40" r="8" fill="url(#vg-dial)" fillOpacity="0.25"/>
+      <circle cx="40" cy="40" r="3" fill="#A78BFA"/>
+      {[0,60,120,180,240,300].map(deg=>(
+        <line key={deg} x1="40" y1="27" x2="40" y2="30" stroke="#A78BFA" strokeWidth="1.5" strokeLinecap="round" transform={`rotate(${deg} 40 40)`}/>
+      ))}
+      <rect x="56" y="36" width="10" height="8" rx="3" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.25)" strokeWidth="1"/>
+      <circle cx="16" cy="22" r="3" fill="rgba(255,255,255,0.12)"/>
+      <circle cx="16" cy="58" r="3" fill="rgba(255,255,255,0.12)"/>
+      {cracked&&(
+        <>
+          <line x1="40" y1="10" x2="44" y2="25" stroke="#FCD34D" strokeWidth="1.5" strokeLinecap="round" opacity="0.8"/>
+          <line x1="44" y1="25" x2="38" y2="35" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" opacity="0.8"/>
+        </>
+      )}
     </svg>
   );
 }
 
-// ─── Dashboard Screen ─────────────────────────────────────────────────────────
-function DashboardScreen({ user, vaults, onAddVault, onViewVaults, onSignOut, lang, setLang }) {
-  const t = T[lang];
-  const [text, setText] = useState("");
-  const [deadlineDate, setDeadlineDate] = useState("");
-  const [deadlineTime, setDeadlineTime] = useState("23:59");
-  const [category, setCategory] = useState("personal");
-  const [secret, setSecret] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [commitWord, setCommitWord] = useState("");
-  const [shaking, setShaking] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => { const tm = setTimeout(() => setVisible(true), 60); return () => clearTimeout(tm); }, []);
-
-  const today = new Date().toISOString().split("T")[0];
-  const canLock = text.trim() && deadlineDate;
-
-  const handleLock = () => { if (!canLock) return; setShowModal(true); };
-
-  const handleConfirm = async () => {
-    if (commitWord !== "COMMIT") {
-      setShaking(true);
-      setTimeout(() => setShaking(false), 500);
-      return;
-    }
-    setSaving(true);
-    await onAddVault({ uid: user.uid, email: user.email, text: text.trim(), deadlineDate, deadlineTime, category, secret });
-    setShowModal(false);
-    setText(""); setDeadlineDate(""); setDeadlineTime("23:59");
-    setCommitWord(""); setSecret(false);
-    setSaving(false);
-  };
-
-  const active = vaults.filter((v) => v.status === "locked").length;
-  const unlocked = vaults.filter((v) => v.status === "unlocked").length;
-  const completed = vaults.filter((v) => v.status === "completed").length;
-  const failed = vaults.filter((v) => v.status === "failed").length;
-  const resolved = completed + failed;
-  const successRate = resolved > 0 ? Math.round((completed / resolved) * 100) : null;
-  const streak = calcStreak(vaults);
-
+// ─── LANG TOGGLE ─────────────────────────────────────────────────────────────
+function LangToggle({ lang, setLang }) {
   return (
-    <div style={{ position: "fixed", inset: 0, overflowY: "auto", background: "#070D1A", transition: "opacity 0.5s ease", opacity: visible ? 1 : 0, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      <div style={{ maxWidth: 620, margin: "0 auto", padding: "44px 24px 100px" }}>
+    <div style={{display:"flex",gap:4}}>
+      {["en","fr"].map(l=>(
+        <button key={l} className={`av-lang ${lang===l?"on":"off"}`} onClick={()=>setLang(l)}>{l.toUpperCase()}</button>
+      ))}
+    </div>
+  );
+}
 
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 48 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg, #8B5CF6, #3B82F6)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 16px rgba(139,92,246,0.4)" }}>
-                <svg width="18" height="18" viewBox="0 0 80 80" fill="none">
-                  <rect x="8" y="10" width="64" height="60" rx="10" fill="rgba(255,255,255,0.9)" />
-                  <circle cx="40" cy="40" r="12" stroke="#8B5CF6" strokeWidth="2.5" fill="none" />
-                  <circle cx="40" cy="40" r="4" fill="#8B5CF6" />
-                  <line x1="40" y1="29" x2="40" y2="32" stroke="#8B5CF6" strokeWidth="1.5" strokeLinecap="round" />
-                  <rect x="54" y="37" width="9" height="7" rx="2.5" fill="#64748B" />
-                </svg>
-              </div>
-              <span style={{ fontSize: 15, fontWeight: 800, color: "#F1F5F9", letterSpacing: "-0.01em" }}>AxisVault</span>
-            </div>
-            <p style={{ fontSize: 13, color: "#475569" }}>
-              {t.welcomeBack}, <span style={{ color: "#8B5CF6", fontWeight: 600 }}>{user.name?.split(" ")[0]}</span>
-              {streak > 1 && <span style={{ marginLeft: 10, fontSize: 12, color: "#F59E0B", fontWeight: 600 }}>{streak} {t.streak}</span>}
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {/* Lang toggle */}
-            {["en", "fr"].map((l) => (
-              <button key={l} onClick={() => setLang(l)}
-                style={{ padding: "4px 8px", borderRadius: 16, background: lang === l ? "rgba(139,92,246,0.15)" : "transparent", border: `1px solid ${lang === l ? "rgba(139,92,246,0.3)" : "rgba(148,163,184,0.1)"}`, color: lang === l ? "#A78BFA" : "#475569", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "all 0.2s" }}>
-                {l.toUpperCase()}
+// ─── BURGER MENU (mobile header) ─────────────────────────────────────────────
+function BurgerMenu({ items, lang }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = e => { if(ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{display:"flex",flexDirection:"column",gap:4,padding:"8px",background:open?T.violetDim:"transparent",border:`1px solid ${open?"rgba(139,92,246,.3)":T.border}`,borderRadius:8,cursor:"pointer",transition:"all .15s"}}>
+        {[0,1,2].map(i=>(
+          <div key={i} style={{width:18,height:2,borderRadius:1,background:open?T.violet:T.tx2,transition:"background .15s"}}/>
+        ))}
+      </button>
+      {open && (
+        <div className="av-burger-menu">
+          {items.map((item, i) => item === "divider"
+            ? <div key={i} className="av-burger-divider"/>
+            : (
+              <button key={i} className="av-burger-item" onClick={()=>{item.onClick();setOpen(false);}}>
+                <span style={{fontSize:16}}>{item.icon}</span>
+                <span>{item.label}</span>
               </button>
-            ))}
-            {vaults.length > 0 && (
-              <button onClick={onViewVaults}
-                style={{ fontSize: 13, fontWeight: 600, color: "#8B5CF6", background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: 20, padding: "6px 14px", cursor: "pointer", transition: "all 0.2s" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(139,92,246,0.18)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(139,92,246,0.1)"; }}>
-                {t.viewGoals} ({vaults.length})
-              </button>
-            )}
-            <button onClick={onSignOut}
-              style={{ fontSize: 12, fontWeight: 500, color: "#334155", background: "transparent", border: "1px solid rgba(148,163,184,0.1)", borderRadius: 20, padding: "6px 12px", cursor: "pointer", transition: "all 0.2s" }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "#64748B"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "#334155"; }}>
-              {t.signOut}
-            </button>
-          </div>
-        </div>
-
-        {/* Hero */}
-        <div style={{ marginBottom: 36 }}>
-          <h1 style={{ fontSize: 36, fontWeight: 800, color: "#F1F5F9", lineHeight: 1.12, letterSpacing: "-0.03em", marginBottom: 12 }}>
-            {t.whatWillYou}<br />
-            <span style={{ background: "linear-gradient(90deg, #34D399 0%, #3B82F6 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              {t.lockInToday}
-            </span>
-          </h1>
-          <p style={{ fontSize: 14, color: "#475569", lineHeight: 1.65 }}>{t.inputSub}</p>
-        </div>
-
-        {/* Input card */}
-        <div style={{ background: "#0F1829", borderRadius: 20, border: "1px solid rgba(139,92,246,0.2)", overflow: "hidden", marginBottom: 14, boxShadow: "0 4px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(139,92,246,0.08)" }}>
-          <textarea
-            value={text} onChange={(e) => setText(e.target.value)}
-            placeholder={t.placeholder} rows={4}
-            style={{ width: "100%", padding: "20px 22px", background: "transparent", border: "none", outline: "none", resize: "none", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 16, color: "#F1F5F9", lineHeight: 1.6, boxSizing: "border-box" }}
-          />
-
-          {/* Category row */}
-          <div style={{ padding: "0 22px 14px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12, color: "#334155", fontWeight: 500 }}>{t.category}</span>
-            {CATEGORIES.map((cat) => (
-              <button key={cat.id} onClick={() => setCategory(cat.id)}
-                style={{
-                  padding: "3px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  fontFamily: "'Plus Jakarta Sans', sans-serif",
-                  background: category === cat.id ? `${cat.color}22` : "transparent",
-                  border: `1px solid ${category === cat.id ? `${cat.color}66` : "rgba(148,163,184,0.1)"}`,
-                  color: category === cat.id ? cat.color : "#475569",
-                  transition: "all 0.15s",
-                }}>
-                {cat.emoji} {t.categories[cat.id]}
-              </button>
-            ))}
-          </div>
-
-          {/* Deadline + secret row */}
-          <div style={{ padding: "0 22px 20px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, color: "#334155", fontWeight: 500 }}>{t.deadline}</span>
-            <input type="date" value={deadlineDate} min={today} onChange={(e) => setDeadlineDate(e.target.value)}
-              style={{ background: "#1E293B", border: "1px solid rgba(148,163,184,0.1)", borderRadius: 8, padding: "5px 10px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: deadlineDate ? "#F1F5F9" : "#475569", colorScheme: "dark", outline: "none" }} />
-            <input type="time" value={deadlineTime} onChange={(e) => setDeadlineTime(e.target.value)}
-              style={{ background: "#1E293B", border: "1px solid rgba(148,163,184,0.1)", borderRadius: 8, padding: "5px 10px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#F1F5F9", colorScheme: "dark", outline: "none" }} />
-
-            {/* Secret toggle */}
-            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginLeft: "auto" }}>
-              <div onClick={() => setSecret(!secret)}
-                style={{
-                  width: 34, height: 19, borderRadius: 10,
-                  background: secret ? "#8B5CF6" : "rgba(148,163,184,0.15)",
-                  border: `1px solid ${secret ? "#7C3AED" : "rgba(148,163,184,0.2)"}`,
-                  position: "relative", cursor: "pointer",
-                  transition: "background 0.2s",
-                }}>
-                <div style={{
-                  position: "absolute", top: 2,
-                  left: secret ? 16 : 2,
-                  width: 13, height: 13, borderRadius: "50%",
-                  background: "#fff",
-                  transition: "left 0.2s",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-                }} />
-              </div>
-              <span style={{ fontSize: 12, color: "#475569", fontWeight: 500 }}>🔒 {t.secretMode}</span>
-            </label>
-          </div>
-
-          {secret && (
-            <div style={{ margin: "0 22px 20px", padding: "8px 12px", background: "rgba(139,92,246,0.08)", borderRadius: 8, border: "1px solid rgba(139,92,246,0.15)" }}>
-              <p style={{ fontSize: 12, color: "#7C3AED", fontWeight: 500 }}>🙈 {t.secretHint}</p>
-            </div>
+            )
           )}
         </div>
+      )}
+    </div>
+  );
+}
 
-        {/* Lock button */}
-        <button onClick={handleLock} disabled={!canLock}
-          style={{
-            width: "100%", padding: "16px 24px", borderRadius: 14,
-            background: canLock ? "linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%)" : "rgba(139,92,246,0.12)",
-            border: "none", cursor: canLock ? "pointer" : "not-allowed",
-            fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 700,
-            color: canLock ? "#ffffff" : "#334155", letterSpacing: "0.05em",
-            transition: "all 0.25s ease",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-            boxShadow: canLock ? "0 4px 28px rgba(139,92,246,0.45)" : "none",
-          }}
-          onMouseEnter={(e) => { if (canLock) { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 36px rgba(139,92,246,0.55)"; } }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = canLock ? "0 4px 28px rgba(139,92,246,0.45)" : "none"; }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <rect x="5" y="11" width="14" height="10" rx="3" stroke="currentColor" strokeWidth="2" />
-            <path d="M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="12" cy="16" r="1.5" fill="currentColor" />
+// ─── NAV LOGO ─────────────────────────────────────────────────────────────────
+function NavLogo() {
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:9}}>
+      <div style={{width:28,height:28,borderRadius:8,background:"linear-gradient(135deg,#8B5CF6,#3B82F6)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 16px rgba(139,92,246,0.3)"}}>
+        <VaultIcon size={17}/>
+      </div>
+      <span style={{fontFamily:FONT_DISPLAY,fontSize:14,fontWeight:800,color:T.tx1,letterSpacing:"-.01em"}}>AxisVault</span>
+    </div>
+  );
+}
+
+// ─── SPLASH ───────────────────────────────────────────────────────────────────
+function Splash({ onComplete, lang }) {
+  const t = useT(lang);
+  const [phase, setPhase] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [fadeOut, setFadeOut] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timers = [
+      setTimeout(() => setVisible(true), 40),
+      setTimeout(() => setPhase(1), 300),
+      setTimeout(() => setPhase(2), 700),   // dial spin starts
+      setTimeout(() => setPhase(3), 2200),  // crack + golden glow
+      setTimeout(() => setFadeOut(true), 3000),
+      setTimeout(() => onComplete(), 3500),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [onComplete]);
+
+  useEffect(() => {
+    if (phase !== 2) return;
+    const start = Date.now(), dur = 1400;
+    const raf = () => {
+      const el = Date.now() - start;
+      setProgress(Math.min(100, (el / dur) * 100));
+      if (el < dur) requestAnimationFrame(raf);
+    };
+    requestAnimationFrame(raf);
+  }, [phase]);
+
+  const dialStyle = {
+    transformOrigin: "80px 80px",
+    transform: phase >= 2 ? "rotate(720deg)" : "rotate(0deg)",
+    transition: phase >= 2 ? "transform 1.8s cubic-bezier(0.4,0,0.2,1)" : "none",
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: T.bg,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      opacity: fadeOut ? 0 : visible ? 1 : 0, transition: "opacity .5s ease",
+    }}>
+      {/* Glow orb */}
+      <div style={{
+        position: "absolute", width: 360, height: 360, borderRadius: "50%",
+        background: "radial-gradient(circle,rgba(139,92,246,.18) 0%,rgba(59,130,246,.07) 45%,transparent 70%)",
+        opacity: phase >= 2 ? 1 : 0,
+        animation: phase >= 2 ? "vaultPulse 2.5s ease-in-out infinite" : "none",
+        transition: "opacity .6s ease",
+      }} />
+
+      {/* Vault with dial */}
+      <div style={{
+        marginBottom: 48, zIndex: 1,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "scale(1)" : "scale(.3)",
+        transition: "opacity .5s ease, transform .7s cubic-bezier(0.34,1.56,0.64,1)",
+        animation: phase >= 1 ? "vaultBounce 4s ease-in-out infinite" : "none",
+      }}>
+        <SplashVaultIcon phase={phase} dialStyle={dialStyle} />
+      </div>
+
+      <div style={{ textAlign: "center", zIndex: 1, marginBottom: 48, opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(14px)", transition: "opacity .5s .2s ease, transform .5s .2s ease" }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 32, fontWeight: 800, color: T.tx1, letterSpacing: "-.03em" }}>{t.appName}</div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".14em", textTransform: "uppercase", marginTop: 6, color: T.tx3 }}>{t.tagline}</div>
+      </div>
+
+      <div style={{ width: 200, height: 2, background: "rgba(148,163,184,.1)", borderRadius: 2, overflow: "hidden", opacity: phase >= 2 ? 1 : 0, transition: "opacity .3s ease", zIndex: 1 }}>
+        <div style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#8B5CF6,#3B82F6)", borderRadius: 2, transition: "width .05s linear" }} />
+      </div>
+    </div>
+  );
+}
+// ─── LandingPage ───────────────────────────────────────────────────────────────────
+function LandingPage({ lang, setLang, onEnter }) {
+  const t = useT(lang);
+  const { isMobile } = useBreakpoint();
+  const [vis, setVis] = useState(false);
+  useEffect(() => { const tm = setTimeout(() => setVis(true), 60); return () => clearTimeout(tm); }, []);
+
+  const features = lang === "fr"
+    ? [
+        { icon: "🔒", title: "Verrouillage irréversible", desc: "Une fois enfermé, l'engagement ne peut pas changer. Le coffre s'ouvre à la deadline — jamais avant." },
+        { icon: "⏱",  title: "Pression en temps réel", desc: "Le cadran tourne, les secondes défilent. Tu ne peux pas ignorer ce que tu as signé." },
+        { icon: "📈", title: "Bilan sans concession", desc: "Livré ou raté — le coffre exige une réponse. L'historique ne ment pas et ne pardonne pas." },
+      ]
+    : [
+        { icon: "🔒", title: "Irrevocable lock-in", desc: "Once sealed, your commitment cannot change. The vault opens at your deadline — never before." },
+        { icon: "⏱",  title: "Real-time pressure", desc: "The dial turns, the seconds roll. You can't ignore what you signed." },
+        { icon: "📈", title: "No-excuse reckoning", desc: "Delivered or missed — the vault demands an answer. The record doesn't lie." },
+      ];
+
+  return (
+    /* AJOUT DE overflowX: "hidden" pour bloquer tout débordement des orbes absolus */
+    <div style={{ position: "fixed", inset: 0, overflowY: "auto", overflowX: "hidden", background: T.bg, opacity: vis ? 1 : 0, transition: "opacity .5s ease" }}>
+      {/* Orbes bg */}
+      <div style={{ position: "absolute", top: -120, left: -80, width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle,rgba(139,92,246,.09) 0%,transparent 65%)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", bottom: 100, right: -100, width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle,rgba(59,130,246,.07) 0%,transparent 65%)", pointerEvents: "none" }} />
+
+      {/* NAV */}
+      <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 32px", position: "relative", zIndex: 10, borderBottom: `1px solid ${T.border}` }}>
+        <NavLogo />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <LangToggle lang={lang} setLang={setLang} />
+          <button className="av-btn-primary" onClick={onEnter} style={{ padding: "9px 20px", fontSize: 13, borderRadius: 9 }}>
+            {lang === "fr" ? "Commencer →" : "Get started →"}
+          </button>
+        </div>
+      </nav>
+
+      {/* HERO */}
+      <section style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: isMobile ? "60px 20px 48px" : "90px 24px 64px", position: "relative", zIndex: 2 }}>
+        {/* Badge */}
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 7,
+          padding: "5px 14px", borderRadius: 20, marginBottom: 28,
+          background: T.violetDim, border: "1px solid rgba(139,92,246,.25)",
+          fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#A78BFA",
+          fontFamily: FONT_BODY,
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.violet, animation: "vaultPulse 2s ease-in-out infinite" }} />
+          {lang === "fr" ? "Accountability sans compromis" : "Zero-excuse accountability"}
+        </div>
+
+        {/* 3D Vault animé */}
+        <div style={{
+          position: "relative", width: 180, height: 180, marginBottom: 52,
+          animation: "vaultBounce 4s ease-in-out infinite",
+          perspective: "800px",
+        }}>
+          {/* Aura */}
+          <div style={{ position: "absolute", inset: -32, borderRadius: "50%", background: "radial-gradient(circle,rgba(139,92,246,.22) 0%,transparent 65%)", animation: "vaultPulse 3s ease-in-out infinite" }} />
+          <div style={{ position: "absolute", inset: -18, borderRadius: "50%", border: "1px solid rgba(139,92,246,.18)", animation: "vaultPulse 2.5s ease-in-out infinite" }} />
+          {/* SVG coffre 3D */}
+          <svg width="180" height="180" viewBox="0 0 160 160" fill="none" style={{ position: "relative", zIndex: 1, filter: "drop-shadow(0 20px 40px rgba(139,92,246,.35))" }}>
+            <defs>
+              <linearGradient id="lv-front" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#8B5CF6"/><stop offset="100%" stopColor="#3B82F6"/>
+              </linearGradient>
+              <linearGradient id="lv-side" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+                <stop offset="0%" stopColor="#4A2AA0"/><stop offset="100%" stopColor="#1A3A7A"/>
+              </linearGradient>
+              <linearGradient id="lv-top" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+                <stop offset="0%" stopColor="rgba(167,139,250,.4)"/><stop offset="100%" stopColor="transparent"/>
+              </linearGradient>
+            </defs>
+            {/* Face droite (3D) */}
+            <polygon points="144,26 158,16 158,136 144,140" fill="url(#lv-side)" opacity=".8"/>
+            {/* Face supérieure (3D) */}
+            <polygon points="16,26 144,26 158,16 30,16" fill="url(#lv-top)"/>
+            {/* Face principale */}
+            <rect x="16" y="26" width="128" height="114" rx="14" fill="url(#lv-front)"/>
+            <rect x="26" y="36" width="108" height="94" rx="10" fill="rgba(255,255,255,0.05)"/>
+            {/* Reflet */}
+            <rect x="26" y="36" width="108" height="28" rx="10" fill="rgba(255,255,255,0.07)"/>
+            {/* Dial */}
+            <circle cx="76" cy="80" r="26" stroke="rgba(167,139,250,.5)" strokeWidth="1.5" fill="rgba(255,255,255,.04)"/>
+            {[0,90,180,270].map((deg,i) => {
+              const a = deg * Math.PI/180;
+              return <line key={i} x1={76+Math.sin(a)*20} y1={80-Math.cos(a)*20} x2={76+Math.sin(a)*25} y2={80-Math.cos(a)*25} stroke="#A78BFA" strokeWidth="1.5" strokeLinecap="round"/>;
+            })}
+            <line x1="76" y1="58" x2="76" y2="68" stroke="#FCD34D" strokeWidth="2.5" strokeLinecap="round"/>
+            <circle cx="76" cy="80" r="10" fill="rgba(139,92,246,.3)" stroke="rgba(167,139,250,.6)" strokeWidth="1.5"/>
+            <circle cx="76" cy="80" r="4" fill="#A78BFA"/>
+            {/* Poignée */}
+            <rect x="128" y="70" width="14" height="20" rx="5" fill="rgba(255,255,255,.14)" stroke="rgba(255,255,255,.3)" strokeWidth="1"/>
+            <circle cx="135" cy="80" r="3" fill="rgba(255,255,255,.4)"/>
+            {/* Boulons */}
+            {[[28,38],[28,128],[132,38],[132,128]].map(([x,y],i) => <circle key={i} cx={x} cy={y} r="3.5" fill="rgba(255,255,255,.1)"/>)}
+          </svg>
+        </div>
+
+        {/* Title */}
+        <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: isMobile ? 34 : 58, fontWeight: 800, color: T.tx1, lineHeight: 1.08, letterSpacing: "-.035em", marginBottom: 20, maxWidth: 680 }}>
+          {lang === "fr" ? <>Des objectifs<br/><span style={{ background: T.grad, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>dont tu ne peux pas</span><br/>te défiler.</> : <>Commitments<br/><span style={{ background: T.grad, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>you can't walk away from.</span></>}
+        </h1>
+        <p style={{ fontFamily: FONT_BODY, fontSize: 16, color: T.tx2, lineHeight: 1.75, maxWidth: 480, marginBottom: 44 }}>
+          {lang === "fr"
+            ? "Écris un engagement, verrouille-le avec une deadline. Quand le coffre s'ouvre, il n'y a plus de cachette — juste un bilan."
+            : "Write a commitment, lock it with a deadline. When the vault opens, there's no hiding — just a record."}
+        </p>
+
+        {/* CTA */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          <button className="av-btn-primary" onClick={onEnter} style={{ padding: "16px 40px", fontSize: 16, borderRadius: 12, animation: "vaultPulse 3s ease-in-out infinite" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <rect x="5" y="11" width="14" height="10" rx="3" stroke="currentColor" strokeWidth="2"/>
+              <path d="M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            {lang === "fr" ? "Verrouille ton premier engagement" : "Lock your first commitment"}
+          </button>
+          <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: T.tx3 }}>
+            {lang === "fr" ? "Gratuit · Connexion Google · 30 secondes" : "Free · Google sign-in · 30 seconds"}
+          </span>
+        </div>
+      </section>
+
+      {/* Stats */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: isMobile ? 24 : 56, padding: "28px 32px", margin: isMobile ? "0 16px 48px" : "0 auto 56px", maxWidth: 700, background: "rgba(30,41,59,.5)", border: `1px solid ${T.border}`, borderRadius: 16 }}>
+        {[["84%", lang === "fr" ? "Taux de réussite moyen" : "Avg success rate"], ["∞", lang === "fr" ? "Coffres possibles" : "Possible vaults"], ["0", lang === "fr" ? "Excuse acceptée" : "Excuses accepted"]].map(([n, l], i, arr) => (
+          <React.Fragment key={l}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: FONT_DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 800, color: "#A78BFA", letterSpacing: "-.03em" }}>{n}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: T.tx3, marginTop: 4, textTransform: "uppercase", letterSpacing: ".1em" }}>{l}</div>
+            </div>
+            {i < arr.length - 1 && !isMobile && <div style={{ width: 1, height: 40, background: T.border }} />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Features */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 14, padding: isMobile ? "0 16px 80px" : "0 32px 100px", maxWidth: 960, margin: "0 auto" }}>
+        {features.map(f => (
+          <div key={f.title} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: "24px 20px", transition: "border-color .2s, transform .2s" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(139,92,246,.3)"; e.currentTarget.style.transform = "translateY(-3px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = ""; }}>
+            <div style={{ width: 40, height: 40, borderRadius: 11, background: T.violetDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginBottom: 14 }}>{f.icon}</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, fontWeight: 700, color: T.tx1, marginBottom: 7, letterSpacing: "-.01em" }}>{f.title}</div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: T.tx2, lineHeight: 1.65 }}>{f.desc}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+// Vault SVG avec cadran animé
+function SplashVaultIcon({ phase, dialStyle }) {
+  // Click sounds via Web Audio (optionnel — silencieux si bloqué)
+  useEffect(() => {
+    if (phase !== 2) return;
+    const clicks = [0, 400, 900, 1300];
+    const timers = clicks.map(delay => setTimeout(() => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 800 + Math.random() * 400;
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.start(); osc.stop(ctx.currentTime + 0.08);
+      } catch {}
+    }, delay));
+    return () => timers.forEach(clearTimeout);
+  }, [phase]);
+
+  return (
+    <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="sv-door" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#8B5CF6"/><stop offset="100%" stopColor="#3B82F6"/>
+        </linearGradient>
+        <radialGradient id="sv-golden" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FCD34D" stopOpacity="0.85"/>
+          <stop offset="60%" stopColor="#F59E0B" stopOpacity="0.4"/>
+          <stop offset="100%" stopColor="#F59E0B" stopOpacity="0"/>
+        </radialGradient>
+      </defs>
+
+      {/* Lumière dorée qui s'échappe */}
+      {phase >= 3 && (
+        <g style={{ animation: "fadeIn .4s ease both" }}>
+          <ellipse cx="80" cy="80" rx="74" ry="74" fill="url(#sv-golden)" opacity=".65"/>
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => (
+            <line key={i}
+              x1={80 + Math.cos(deg * Math.PI/180) * 74}
+              y1={80 + Math.sin(deg * Math.PI/180) * 74}
+              x2={80 + Math.cos(deg * Math.PI/180) * 90}
+              y2={80 + Math.sin(deg * Math.PI/180) * 90}
+              stroke="#FCD34D" strokeWidth="1.5" opacity={i % 2 === 0 ? .8 : .4}
+              style={{ animation: `fadeIn .3s ease ${i * 0.04}s both` }}
+            />
+          ))}
+        </g>
+      )}
+
+      {/* Corps du coffre */}
+      <rect x="16" y="20" width="128" height="120" rx="18" fill="url(#sv-door)" opacity=".95"/>
+      <rect x="26" y="30" width="108" height="100" rx="12" fill="rgba(255,255,255,0.05)"/>
+
+      {/* Cadran qui tourne */}
+      <g style={dialStyle}>
+        <circle cx="80" cy="80" r="30" stroke="rgba(167,139,250,.5)" strokeWidth="1.5" fill="rgba(255,255,255,.04)"/>
+        {/* Chiffres sur le cadran */}
+        {[0, 25, 50, 75].map((num, i) => {
+          const angle = i * 90 * Math.PI / 180;
+          const tx = 80 + Math.sin(angle) * 23;
+          const ty = 80 - Math.cos(angle) * 23 + 4;
+          return (
+            <text key={num} x={tx} y={ty} textAnchor="middle"
+              style={{ fontSize: 7, fill: "#A78BFA", fontFamily: "system-ui", fontWeight: 600 }}>{num}</text>
+          );
+        })}
+        {/* Tirets */}
+        {Array.from({length: 20}, (_, i) => {
+          const angle = i * 18 * Math.PI / 180;
+          const r1 = 25, r2 = i % 5 === 0 ? 21 : 23;
+          return (
+            <line key={i}
+              x1={80 + Math.sin(angle) * r1} y1={80 - Math.cos(angle) * r1}
+              x2={80 + Math.sin(angle) * r2} y2={80 - Math.cos(angle) * r2}
+              stroke="#A78BFA" strokeWidth={i % 5 === 0 ? 1.5 : .8} strokeLinecap="round"/>
+          );
+        })}
+        {/* Pointeur */}
+        <line x1="80" y1="55" x2="80" y2="67" stroke="#FCD34D" strokeWidth="2.5" strokeLinecap="round"/>
+        {/* Centre */}
+        <circle cx="80" cy="80" r="12" fill="rgba(139,92,246,.3)" stroke="rgba(167,139,250,.6)" strokeWidth="1.5"/>
+        <circle cx="80" cy="80" r="5" fill="#A78BFA"/>
+      </g>
+
+      {/* Poignée */}
+      <rect x="136" y="72" width="16" height="16" rx="5" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.25)" strokeWidth="1"/>
+      <circle cx="144" cy="80" r="3" fill="rgba(255,255,255,.35)"/>
+
+      {/* Boulons */}
+      {[[30,36],[30,124],[130,36],[130,124]].map(([x,y],i) => (
+        <circle key={i} cx={x} cy={y} r="4" fill="rgba(255,255,255,.1)"/>
+      ))}
+
+      {/* Fissures (après ouverture) */}
+      {phase >= 3 && (
+        <>
+          <line x1="80" y1="20" x2="87" y2="52" stroke="#FCD34D" strokeWidth="2" strokeLinecap="round" style={{ animation: "fadeIn .2s ease both" }}/>
+          <line x1="87" y1="52" x2="74" y2="72" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" style={{ animation: "fadeIn .2s ease .1s both" }}/>
+        </>
+      )}
+    </svg>
+  );
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+function Login({ lang, setLang }) {
+  const t=useT(lang);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState(null);
+  const [vis,setVis]=useState(false);
+  useEffect(()=>{const tm=setTimeout(()=>setVis(true),60);return()=>clearTimeout(tm);},[]);
+  const go=async()=>{
+    setLoading(true);setError(null);
+    const {error:e}=await signInWithGoogle();
+    if(e){setError(t.loginErr);setLoading(false);}
+  };
+  return (
+    <div style={{position:"fixed",inset:0,background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,opacity:vis?1:0,transition:"opacity .5s ease"}}>
+      <div style={{position:"absolute",top:"10%",left:"15%",width:300,height:300,borderRadius:"50%",background:"radial-gradient(circle,rgba(139,92,246,.07) 0%,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:"15%",right:"10%",width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle,rgba(59,130,246,.06) 0%,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",top:20,right:20}}><LangToggle lang={lang} setLang={setLang}/></div>
+      <div style={{maxWidth:400,width:"100%",textAlign:"center",position:"relative",zIndex:1}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:36}}>
+          <div style={{width:58,height:58,borderRadius:17,background:"linear-gradient(135deg,#8B5CF6,#3B82F6)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 40px rgba(139,92,246,.4)"}}>
+            <VaultIcon size={36}/>
+          </div>
+        </div>
+        <div style={{fontFamily:FONT_DISPLAY,fontSize:11,fontWeight:700,letterSpacing:".18em",textTransform:"uppercase",color:T.tx3,marginBottom:16}}>AxisVault</div>
+        <h1 style={{fontFamily:FONT_DISPLAY,fontSize:28,fontWeight:800,color:T.tx1,lineHeight:1.2,letterSpacing:"-.02em",marginBottom:12}}>
+          {t.loginH}<br/>
+          <span style={{background:T.grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}></span>
+        </h1>
+        <p style={{fontSize:14,color:T.tx2,lineHeight:1.7,marginBottom:44}}>{t.loginSub}</p>
+        <button onClick={go} disabled={loading}
+          style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,width:"100%",padding:"14px 20px",borderRadius:11,background:"#fff",border:"none",cursor:loading?"not-allowed":"pointer",fontFamily:FONT_DISPLAY,fontSize:15,fontWeight:600,color:"#111",boxShadow:"0 2px 20px rgba(0,0,0,.3)",transition:"all .15s",opacity:loading?.7:1}}
+          onMouseEnter={e=>{if(!loading){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 28px rgba(0,0,0,.38)";}}}
+          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 20px rgba(0,0,0,.3)";}}>
+          {loading?<div style={{width:18,height:18,border:"2.5px solid #ddd",borderTopColor:"#8B5CF6",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>:<GoogleLogo/>}
+          {loading?t.signingIn:t.google}
+        </button>
+        {error&&<p style={{fontSize:13,color:T.red,marginTop:14}}>{error}</p>}
+        <p style={{fontSize:12,color:T.tx3,marginTop:22,lineHeight:1.6}}>{t.terms}</p>
+      </div>
+    </div>
+  );
+}
+
+function GoogleLogo(){return(
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+    <path d="M19.6 10.227c0-.709-.064-1.39-.182-2.045H10v3.868h5.382a4.6 4.6 0 01-1.996 3.018v2.51h3.232c1.891-1.742 2.982-4.305 2.982-7.35z" fill="#4285F4"/>
+    <path d="M10 20c2.7 0 4.964-.895 6.618-2.423l-3.232-2.509c-.895.6-2.04.955-3.386.955-2.605 0-4.81-1.759-5.595-4.123H1.064v2.59A9.996 9.996 0 0010 20z" fill="#34A853"/>
+    <path d="M4.405 11.9A6.01 6.01 0 014.09 10c0-.662.114-1.305.314-1.9V5.51H1.063A9.996 9.996 0 000 10c0 1.614.386 3.141 1.064 4.491L4.405 11.9z" fill="#FBBC05"/>
+    <path d="M10 3.977c1.468 0 2.786.505 3.823 1.496l2.868-2.868C14.959.99 12.695 0 10 0A9.996 9.996 0 001.064 5.51L4.405 8.1C5.19 5.736 7.395 3.977 10 3.977z" fill="#EA4335"/>
+  </svg>
+);}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+// Ajoute ces helpers AVANT le composant Dashboard (ou dans le module)
+function getMinDeadline() {
+  const d = new Date(Date.now() + 30 * 60 * 1000); // +30 min
+  return d;
+}
+function getMinDateStr() {
+  return getMinDeadline().toISOString().split("T")[0];
+}
+function getMinTimeStr(dateStr) {
+  const now = new Date(Date.now() + 30 * 60 * 1000);
+  const today = now.toISOString().split("T")[0];
+  if (dateStr === today) {
+    return now.toTimeString().slice(0, 5); // "HH:MM"
+  }
+  return "00:00";
+}
+
+// Validation complète
+function validateDeadline(dateStr, timeStr,lang) {
+  if (!dateStr || !timeStr) return { valid: false, error: null };
+  const chosen = new Date(`${dateStr}T${timeStr}:00`);
+  const minTime = new Date(Date.now() + 30 * 60 * 1000);
+
+  if (chosen < new Date()) {
+    return { valid: false, error: lang === "fr" ? "Cette date est dans le passé." : "This date is in the past." };
+  }
+  if (chosen < minTime) {
+    const diff = Math.ceil((minTime - chosen) / 60000);
+    return { valid: false, error: lang === "fr" ? `Minimum +30 min depuis maintenant (encore ${diff} min à ajouter).` : `Minimum +30 min from now (add ${diff} more min).` };
+  }
+  return { valid: true, error: null };
+}
+function Dashboard({ user,vaults,onAdd,onViewVaults,onSignOut,lang,setLang }) {
+  const t=useT(lang);
+  const toast=useToast();
+  const { isMobile } = useBreakpoint();
+  const [text,setText]=useState("");
+  const [date,setDate]=useState("");
+  const [time,setTime]=useState("23:59");
+  const [cat,setCat]=useState("personal");
+  const [modal,setModal]=useState(false);
+  const [cword,setCword]=useState("");
+  const [shaking,setShaking]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [vis,setVis]=useState(false);
+  const [signOutModal,setSignOutModal]=useState(false);
+  useEffect(()=>{const tm=setTimeout(()=>setVis(true),60);return()=>clearTimeout(tm);},[]);
+  const today=new Date().toISOString().split("T")[0];
+  const dlValidation = validateDeadline(date, time,lang); 
+  const canLock=text.trim().length>2&&date && dlValidation.valid;
+  useEffect(()=>{
+    const h=e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter"&&canLock) setModal(true);};
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
+      console.log(t)
+  },[canLock]);
+  const confirm=async()=>{
+    if(cword!=="COMMIT"){setShaking(true);setTimeout(()=>setShaking(false),400);return;}
+    setSaving(true);
+    await onAdd({uid:user.uid,email:user.email,text:text.trim(),deadlineDate:date,deadlineTime:time,category:cat});
+    toast(t.toastLocked,"success");
+    setModal(false);setText("");setDate("");setTime("23:59");setCword("");setSaving(false);
+  };
+  const active=vaults.filter(v=>v.status==="locked").length;
+  const open_=vaults.filter(v=>v.status==="unlocked").length;
+  const done=vaults.filter(v=>v.status==="completed").length;
+  const missed=vaults.filter(v=>v.status==="failed").length;
+  const resolved=done+missed;
+  const sr=resolved>0?Math.round((done/resolved)*100):null;
+  const str=streakCount(vaults);
+
+  const burgerItems = [
+    { icon:"🌐", label: lang==="fr"?"English":"Français", onClick:()=>setLang(lang==="fr"?"en":"fr") },
+    "divider",
+    ...(vaults.length>0 ? [{ icon:"🏛", label:`${t.viewVaults} (${vaults.length})`, onClick:onViewVaults }] : []),
+    "divider",
+    { icon:"🚪", label:t.signOut, onClick:()=>setSignOutModal(true) },
+  ];
+
+  return (
+    <div style={{position:"fixed",inset:0,overflowY:"auto",background:T.bg,opacity:vis?1:0,transition:"opacity .4s ease"}}>
+      <div style={{maxWidth:580,margin:"0 auto",padding:`40px 20px ${isMobile?"140px":"120px"}`}}>
+
+        {/* HEADER */}
+        <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:48}}>
+          <NavLogo/>
+          {isMobile ? (
+            <BurgerMenu items={burgerItems} lang={lang}/>
+          ) : (
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <LangToggle lang={lang} setLang={setLang}/>
+              {vaults.length>0&&(
+                <button className="av-btn-ghost" onClick={onViewVaults} style={{marginLeft:4}}>
+                  {t.viewVaults}
+                  <span style={{padding:"1px 6px",borderRadius:20,background:T.violetDim,color:T.violet,fontSize:11,fontWeight:700}}>{vaults.length}</span>
+                </button>
+              )}
+              <button className="av-btn-ghost" onClick={()=>setSignOutModal(true)} style={{padding:"8px 12px"}}>{t.signOut}</button>
+            </div>
+          )}
+        </header>
+
+        <p style={{fontSize:13,color:T.tx2,marginBottom:8}}>
+          {t.welcomeBack}, <span style={{color:T.violet,fontWeight:600}}>{user.name?.split(" ")[0]}</span>
+          {str>1&&<span style={{marginLeft:10,color:T.amber,fontWeight:600,fontSize:12}}>🔥 {str} {t.streak}</span>}
+        </p>
+        <h1 style={{fontFamily:FONT_DISPLAY,fontSize:isMobile?28:36,fontWeight:800,color:T.tx1,lineHeight:1.1,letterSpacing:"-.03em",marginBottom:10}}>
+          {t.hero1}<br/>
+          <span style={{background:T.grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{t.hero2}</span>
+        </h1>
+        <p style={{fontSize:13,color:T.tx2,marginBottom:28,lineHeight:1.65}}>{t.inputSub}</p>
+
+        {/* INPUT CARD */}
+        <div style={{background:T.surface,borderRadius:16,border:`1px solid ${canLock?"rgba(139,92,246,.3)":T.border}`,overflow:"hidden",marginBottom:10,boxShadow:canLock?"0 0 0 1px rgba(139,92,246,.08),0 4px 24px rgba(139,92,246,.1)":"none",transition:"border-color .2s,box-shadow .2s"}}>
+          <textarea className="av-input" value={text} onChange={e=>setText(e.target.value)} placeholder={t.placeholder} rows={3}/>
+          <div style={{height:1,background:T.border,margin:"0 22px"}}/>
+          {/* CATEGORIES */}
+          <div style={{padding:"12px 22px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,color:T.tx3,fontWeight:500,marginRight:2}}>{t.category}</span>
+            {CATS.map(c=>(
+              <button key={c.id} onClick={()=>setCat(c.id)} style={{padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",background:cat===c.id?`${c.color}1A`:"transparent",border:`1px solid ${cat===c.id?`${c.color}44`:T.border}`,color:cat===c.id?c.color:T.tx2,transition:"all .15s"}}>
+                {c.symbol} {lang==="fr"?c.fr:c.en}
+              </button>
+            ))}
+          </div>
+          <div style={{height:1,background:T.border,margin:"0 22px"}}/>
+          {/* DEADLINE */}
+       <div style={{ padding: "12px 22px 18px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", flexDirection: "column" }}>
+  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+    <span style={{ fontSize: 11, color: T.tx3, fontWeight: 500 }}>{t.deadline}</span>
+    <input
+      type="date" className="av-date"
+      value={date}
+      min={getMinDateStr()}
+      onChange={e => {
+        setDate(e.target.value);
+        // Auto-ajuste le time si on est sur aujourd'hui
+        if (e.target.value === new Date().toISOString().split("T")[0]) {
+          const minT = getMinTimeStr(e.target.value);
+          if (time < minT) setTime(minT);
+        }
+      }}
+    />
+    <input
+      type="time" className="av-date"
+      value={time}
+      min={getMinTimeStr(date)}
+      onChange={e => setTime(e.target.value)}
+      style={{ width: 92 }}
+    />
+  </div>
+  {/* Feedback en temps réel */}
+  {date && dlValidation.error && (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 6,
+      fontSize: 12, color: T.red, fontFamily: FONT_BODY,
+      padding: "5px 10px", borderRadius: 7,
+      background: T.redDim, border: `1px solid rgba(248,113,113,.2)`,
+      animation: "fadeIn .2s ease",
+    }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+        <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        <circle cx="12" cy="16" r="1" fill="currentColor"/>
+      </svg>
+      {dlValidation.error}
+    </div>
+  )}
+  {date && dlValidation.valid && (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 6,
+      fontSize: 12, color: T.green, fontFamily: FONT_BODY,
+    }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+        <path d="M8 12l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      {lang === "fr" ? "Deadline valide ✓" : "Valid deadline ✓"}
+    </div>
+  )}
+</div>
+        </div>
+
+        <button className="av-btn-primary" onClick={()=>setModal(true)} disabled={!canLock}
+          style={{width:"100%",padding:"14px",borderRadius:11,fontSize:14}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <rect x="5" y="11" width="14" height="10" rx="3" stroke="currentColor" strokeWidth="2"/>
+            <path d="M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
           </svg>
           {t.lockVault}
+          {canLock&&!isMobile&&<span style={{fontSize:11,opacity:.6,fontWeight:500,marginLeft:4}}>⌘↵</span>}
         </button>
 
-        {/* Stats */}
-        {vaults.length > 0 && (
-          <>
-            <div style={{ marginTop: 36, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-              {[
-                { label: t.active, value: active, color: "#8B5CF6" },
-                { label: t.unlocked, value: unlocked, color: "#34D399" },
-                { label: t.completed, value: completed, color: "#F59E0B" },
-                { label: t.failed, value: failed, color: "#F87171" },
-              ].map((s) => (
-                <div key={s.label} style={{ background: "#0F1829", borderRadius: 14, padding: "14px 8px", border: "1px solid rgba(148,163,184,0.07)", textAlign: "center" }}>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: "#334155", marginTop: 5, fontWeight: 500 }}>{s.label}</div>
+        {/* STATS */}
+        {vaults.length>0&&(
+          <div style={{marginTop:28}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8}}>
+              {[{l:t.active,v:active,c:T.violet},{l:t.open,v:open_,c:T.blue},{l:t.done,v:done,c:T.green},{l:t.missed_f,v:missed,c:T.red}].map(s=>(
+                <div key={s.l} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 10px",textAlign:"center"}}>
+                  <div style={{fontFamily:FONT_DISPLAY,fontSize:isMobile?18:22,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div>
+                  <div style={{fontSize:10,color:T.tx2,marginTop:5,fontWeight:500}}>{s.l}</div>
                 </div>
               ))}
             </div>
-            {successRate !== null && (
-              <div style={{ marginTop: 10, background: "#0F1829", borderRadius: 14, padding: "14px 20px", border: "1px solid rgba(148,163,184,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: "#475569", fontWeight: 500 }}>{t.successRate}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 100, height: 4, background: "rgba(148,163,184,0.1)", borderRadius: 2, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${successRate}%`, background: successRate >= 70 ? "#34D399" : successRate >= 40 ? "#F59E0B" : "#F87171", borderRadius: 2, transition: "width 0.6s ease" }} />
+            {sr!==null&&(
+              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:13,color:T.tx2}}>{t.successRate}</span>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div className="pbar" style={{width:isMobile?60:90}}>
+                    <div className="pfill" style={{width:`${sr}%`,background:sr>=70?T.green:sr>=40?"linear-gradient(90deg,#8B5CF6,#3B82F6)":T.red}}/>
                   </div>
-                  <span style={{ fontSize: 20, fontWeight: 800, color: successRate >= 70 ? "#34D399" : successRate >= 40 ? "#F59E0B" : "#F87171" }}>{successRate}%</span>
+                  <span style={{fontFamily:FONT_DISPLAY,fontSize:18,fontWeight:800,color:sr>=70?T.green:sr>=40?T.violet:T.red,minWidth:42,textAlign:"right"}}>{sr}%</span>
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
 
-      {showModal && (
-        <CommitModal
-          goalText={text} deadline={`${deadlineDate} ${deadlineTime}`}
-          commitWord={commitWord} onCommitWordChange={setCommitWord}
-          onConfirm={handleConfirm} onCancel={() => { setShowModal(false); setCommitWord(""); }}
-          shaking={shaking} saving={saving} lang={lang}
-        />
+      {/* MOBILE BOTTOM NAV */}
+      {isMobile && (
+        <nav className="av-bottom-nav">
+          <button className="av-bottom-nav-item active" onClick={()=>{}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="5" y="11" width="14" height="10" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+              <path d="M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            {t.lockVault.split(" ")[0]}
+          </button>
+          {vaults.length>0&&(
+            <button className="av-bottom-nav-item" onClick={onViewVaults}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                <rect x="14" y="3" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                <rect x="3" y="14" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                <rect x="14" y="14" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+              </svg>
+              {t.viewVaults}
+            </button>
+          )}
+        </nav>
+      )}
+
+      {modal&&(
+        <CommitModal goalText={text} deadline={fmtDate(date,time)}
+          cword={cword} onCword={setCword}
+          onConfirm={confirm} onCancel={()=>{setModal(false);setCword("");}}
+          shaking={shaking} saving={saving} lang={lang}/>
+      )}
+      {signOutModal&&(
+        <SignOutModal onConfirm={()=>{setSignOutModal(false);onSignOut();}} onCancel={()=>setSignOutModal(false)} lang={lang}/>
       )}
     </div>
   );
 }
 
-// ─── CommitModal ──────────────────────────────────────────────────────────────
-function CommitModal({ goalText, deadline, commitWord, onCommitWordChange, onConfirm, onCancel, shaking, saving, lang }) {
-  const t = T[lang];
-  const canConfirm = commitWord === "COMMIT";
+// ─── COMMIT MODAL ─────────────────────────────────────────────────────────────
+function CommitModal({ goalText,deadline,cword,onCword,onConfirm,onCancel,shaking,saving,lang }) {
+  const t=useT(lang);
+  const valid=cword==="COMMIT";
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "rgba(7,13,26,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", animation: "fadeIn 0.2s ease" }}>
-      <div style={{ background: "#0F1829", borderRadius: 24, padding: "36px 32px", maxWidth: 440, width: "100%", border: "1px solid rgba(139,92,246,0.2)", boxShadow: "0 32px 80px rgba(0,0,0,0.6)", animation: "slideUp 0.25s cubic-bezier(0.34,1.56,0.64,1)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>🔒</div>
+    <div className="av-modal-bg">
+      <div className="av-modal">
+        <div style={{textAlign:"center",marginBottom:22}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:50,height:50,borderRadius:14,background:T.violetDim,border:"1px solid rgba(139,92,246,.25)",fontSize:22,marginBottom:14}}>🔒</div>
+          <h2 style={{fontFamily:FONT_DISPLAY,fontSize:18,fontWeight:800,color:T.tx1,letterSpacing:"-.02em",marginBottom:6}}>{t.irrevTitle}</h2>
+          <p style={{fontSize:13,color:T.tx2,lineHeight:1.6}}>{t.irrevSub}</p>
         </div>
-        <h2 style={{ fontSize: 20, fontWeight: 800, color: "#F1F5F9", textAlign: "center", marginBottom: 8, letterSpacing: "-0.02em" }}>{t.irreversible}</h2>
-        <p style={{ fontSize: 13, color: "#475569", textAlign: "center", lineHeight: 1.6, marginBottom: 24 }}>{t.irreversibleSub}</p>
-
-        <div style={{ background: "#070D1A", borderRadius: 12, padding: "14px 16px", marginBottom: 24, border: "1px solid rgba(139,92,246,0.12)" }}>
-          <p style={{ fontSize: 13, color: "#64748B", fontWeight: 500, lineHeight: 1.5, marginBottom: 6 }}>"{goalText}"</p>
-          <p style={{ fontSize: 12, color: "#334155" }}>{t.unlocks} <span style={{ color: "#475569" }}>{deadline}</span></p>
+        <div style={{background:T.surfaceEl,borderRadius:10,padding:"13px 15px",marginBottom:20,border:`1px solid ${T.border}`}}>
+          <p style={{fontSize:13,color:T.tx1,fontWeight:500,lineHeight:1.55,marginBottom:6}}>"{goalText}"</p>
+          <p style={{fontSize:12,color:T.tx2}}>{t.unlocks}: <span style={{color:T.tx1}}>{deadline}</span></p>
         </div>
-
-        <p style={{ fontSize: 13, color: "#64748B", marginBottom: 10, fontWeight: 500 }}>
-          {t.typeCommit} <span style={{ color: "#8B5CF6", fontWeight: 700 }}>COMMIT</span> {t.toConfirm}
+        <p style={{fontSize:13,color:T.tx2,marginBottom:8}}>
+          {t.typeCommit} <span style={{color:T.violet,fontWeight:700}}>COMMIT</span> {t.toConfirm}
         </p>
-        <input type="text" value={commitWord} onChange={(e) => onCommitWordChange(e.target.value.toUpperCase())}
-          placeholder="COMMIT" autoFocus
-          style={{ width: "100%", padding: "12px 16px", borderRadius: 10, background: "#1E293B", border: `1.5px solid ${canConfirm ? "#8B5CF6" : "rgba(148,163,184,0.1)"}`, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700, color: "#F1F5F9", outline: "none", letterSpacing: "0.1em", transition: "border-color 0.2s", animation: shaking ? "shake 0.4s ease" : "none", marginBottom: 20, boxSizing: "border-box" }} />
-
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: "12px", borderRadius: 10, background: "rgba(148,163,184,0.06)", border: "1px solid rgba(148,163,184,0.1)", color: "#64748B", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>{t.cancel}</button>
-          <button onClick={onConfirm} disabled={!canConfirm || saving}
-            style={{ flex: 2, padding: "12px", borderRadius: 10, background: canConfirm && !saving ? "linear-gradient(135deg, #8B5CF6, #3B82F6)" : "rgba(139,92,246,0.12)", border: "none", color: canConfirm && !saving ? "#fff" : "#334155", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: canConfirm && !saving ? "pointer" : "not-allowed", boxShadow: canConfirm && !saving ? "0 4px 16px rgba(139,92,246,0.4)" : "none" }}>
-            {saving ? t.saving : t.lockItIn}
+        <input className={`av-commit-input${valid?" valid":""}${shaking?" shake":""}`}
+          type="text" value={cword} autoFocus placeholder="COMMIT"
+          onChange={e=>onCword(e.target.value.toUpperCase())}
+          onKeyDown={e=>{if(e.key==="Enter"&&valid) onConfirm();}}
+          style={{marginBottom:18}}/>
+        <div style={{display:"flex",gap:8}}>
+          <button className="av-btn-ghost" onClick={onCancel} style={{flex:1,justifyContent:"center",padding:"12px"}}>{t.cancel}</button>
+          <button className="av-btn-primary" onClick={onConfirm} disabled={!valid||saving} style={{flex:2,justifyContent:"center",padding:"12px"}}>
+            {saving?t.saving:t.lockItIn}
           </button>
         </div>
       </div>
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(24px) scale(0.96); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
-        @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
-      `}</style>
     </div>
   );
 }
 
-// ─── Vaults Grid Screen ───────────────────────────────────────────────────────
-function VaultsScreen({ vaults, onBack, onSignOut, lang, setLang }) {
-  const t = T[lang];
-  const [visible, setVisible] = useState(false);
-  const [filter, setFilter] = useState("all");
-  const confettiRef = useRef(null);
+// ─── VAULTS SCREEN ────────────────────────────────────────────────────────────
+function VaultsScreen({ vaults,onBack,onSignOut,lang,setLang,onUpdateVault }) {
+  const t=useT(lang);
+  const { isMobile, width } = useBreakpoint();
+  const [vis,setVis]=useState(false);
+  const [filter,setFilter]=useState("all");
+  const [sort,setSort]=useState("newest");
+  const [pins,setPins]=useState(getPins);
+  const [signOutModal,setSignOutModal]=useState(false);
+  useEffect(()=>{const tm=setTimeout(()=>setVis(true),60);return()=>clearTimeout(tm);},[]);
 
-  useEffect(() => { const tm = setTimeout(() => setVisible(true), 60); return () => clearTimeout(tm); }, []);
-
-  const handleOutcome = useCallback(async (vaultId, outcome) => {
-    const quotes = outcome === "completed" ? T[lang].congrats : T[lang].encourage;
-    const msg = quotes[Math.floor(Math.random() * quotes.length)];
-    await respondToVault(vaultId, outcome, msg);
-    if (outcome === "completed" && confettiRef.current) {
-      const rect = confettiRef.current.getBoundingClientRect();
-      import("canvas-confetti").then(({ default: confetti }) => {
-        confetti({ particleCount: 140, spread: 80, origin: { x: (rect.left + rect.width / 2) / window.innerWidth, y: (rect.top + rect.height / 2) / window.innerHeight }, colors: ["#34D399", "#8B5CF6", "#3B82F6", "#F59E0B", "#FCD34D"] });
-      });
+  const handleTogglePin=useCallback(id=>{setPins(togglePin(id));},[]);
+  const handleOutcome=useCallback(async(vault,outcome,note)=>{
+    const quotes=outcome==="completed"?STRINGS[lang].congrats:STRINGS[lang].encourage;
+    const msg=note||(quotes[Math.floor(Math.random()*quotes.length)]);
+    onUpdateVault(vault.id,{status:outcome,feedback_message:msg,responded_at:new Date().toISOString()});
+    await respondToVault(vault.id,outcome,msg);
+    if(outcome==="completed"){
+      try{const{default:c}=await import("canvas-confetti");c({particleCount:100,spread:70,origin:{x:.5,y:.55},colors:["#34D399","#8B5CF6","#3B82F6","#FCD34D"]});}catch{}
     }
-  }, [lang]);
+  },[onUpdateVault,lang]);
 
-  const statuses = ["all", "locked", "unlocked", "completed", "failed"];
-  const filtered = filter === "all" ? vaults : vaults.filter((v) => v.status === filter);
+  const statusLabels={all:t.all,locked:t.locked,unlocked:t.timeIsUp,completed:t.done,failed:t.missed_f};
+  const filterMap={"all":null,"locked":"locked","unlocked":"unlocked","completed":"completed","failed":"failed"};
+  let displayed=[...vaults];
+  if(filter!=="all") displayed=displayed.filter(v=>v.status===filterMap[filter]);
+  if(sort==="deadline") displayed.sort((a,b)=>new Date(a.unlock_at)-new Date(b.unlock_at));
+  displayed.sort((a,b)=>(pins.includes(b.id)?1:0)-(pins.includes(a.id)?1:0));
+  const counts=s=>s==="all"?vaults.length:vaults.filter(v=>v.status===filterMap[s]).length;
+
+  // 3 columns on wide screens, 2 on tablet, 1 on mobile
+  const cols = width >= 1100 ? 3 : width >= 640 ? 2 : 1;
+
+  const burgerItems = [
+    { icon:"🌐", label: lang==="fr"?"English":"Français", onClick:()=>setLang(lang==="fr"?"en":"fr") },
+    "divider",
+    { icon:"➕", label:`+ ${t.newVault}`, onClick:onBack },
+    "divider",
+    { icon:"🚪", label:t.signOut, onClick:()=>setSignOutModal(true) },
+  ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, overflowY: "auto", background: "#070D1A", transition: "opacity 0.5s ease", opacity: visible ? 1 : 0, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      <div style={{ maxWidth: 760, margin: "0 auto", padding: "44px 24px 100px" }}>
+    <div style={{position:"fixed",inset:0,overflowY:"auto",background:T.bg,opacity:vis?1:0,transition:"opacity .4s ease"}}>
+      <div style={{maxWidth:1160,margin:"0 auto",padding:`40px 20px ${isMobile?"140px":"80px"}`}}>
 
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg, #8B5CF6, #3B82F6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="18" height="18" viewBox="0 0 80 80" fill="none">
-                  <rect x="8" y="10" width="64" height="60" rx="10" fill="rgba(255,255,255,0.9)" />
-                  <circle cx="40" cy="40" r="12" stroke="#8B5CF6" strokeWidth="2.5" fill="none" />
-                  <circle cx="40" cy="40" r="4" fill="#8B5CF6" />
-                  <line x1="40" y1="29" x2="40" y2="32" stroke="#8B5CF6" strokeWidth="1.5" strokeLinecap="round" />
-                  <rect x="54" y="37" width="9" height="7" rx="2.5" fill="#64748B" />
-                </svg>
-              </div>
-              <span style={{ fontSize: 15, fontWeight: 800, color: "#F1F5F9" }}>AxisVault</span>
+        {/* HEADER */}
+        <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32}}>
+          <NavLogo/>
+          {isMobile ? (
+            <BurgerMenu items={burgerItems} lang={lang}/>
+          ) : (
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <LangToggle lang={lang} setLang={setLang}/>
+              <button className="av-btn-ghost" onClick={onBack} style={{marginLeft:4}}>+ {t.newVault}</button>
+              <button className="av-btn-ghost" onClick={()=>setSignOutModal(true)}>{t.signOut}</button>
             </div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#F1F5F9", letterSpacing: "-0.02em" }}>{t.yourGoals}</h1>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {["en", "fr"].map((l) => (
-              <button key={l} onClick={() => setLang(l)}
-                style={{ padding: "4px 8px", borderRadius: 16, background: lang === l ? "rgba(139,92,246,0.15)" : "transparent", border: `1px solid ${lang === l ? "rgba(139,92,246,0.3)" : "rgba(148,163,184,0.1)"}`, color: lang === l ? "#A78BFA" : "#475569", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                {l.toUpperCase()}
-              </button>
+          )}
+        </header>
+
+        {/* TITLE + SORT */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+          <h1 style={{fontFamily:FONT_DISPLAY,fontSize:isMobile?18:22,fontWeight:800,color:T.tx1,letterSpacing:"-.02em"}}>{t.yourVaults}</h1>
+          <div style={{display:"flex",gap:4,alignItems:"center"}}>
+            <span style={{fontSize:12,color:T.tx3}}>{t.sortBy}:</span>
+            {[["newest",t.newest],["deadline",t.deadline_s]].map(([k,l])=>(
+              <button key={k} className={`av-tab ${sort===k?"on":"off"}`} onClick={()=>setSort(k)} style={{padding:"4px 11px",fontSize:11}}>{l}</button>
             ))}
-            <button onClick={onBack} style={{ fontSize: 13, fontWeight: 600, color: "#8B5CF6", background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: 20, padding: "6px 14px", cursor: "pointer" }}>{t.newGoal}</button>
-            <button onClick={onSignOut} style={{ fontSize: 12, color: "#334155", background: "transparent", border: "1px solid rgba(148,163,184,0.1)", borderRadius: 20, padding: "6px 12px", cursor: "pointer" }}>{t.signOut}</button>
           </div>
         </div>
 
-        {/* Filter tabs */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 28, flexWrap: "wrap" }}>
-          {statuses.map((s) => (
-            <button key={s} onClick={() => setFilter(s)}
-              style={{
-                padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                background: filter === s ? "rgba(139,92,246,0.2)" : "transparent",
-                border: `1px solid ${filter === s ? "rgba(139,92,246,0.4)" : "rgba(148,163,184,0.1)"}`,
-                color: filter === s ? "#A78BFA" : "#475569",
-                transition: "all 0.15s",
-              }}>
-              {s === "all" ? (lang === "fr" ? "Tous" : "All") : t[s] || s}
-              <span style={{ marginLeft: 6, opacity: 0.6 }}>
-                {s === "all" ? vaults.length : vaults.filter((v) => v.status === s).length}
-              </span>
+        {/* FILTER TABS */}
+        <div style={{display:"flex",gap:6,marginBottom:28,flexWrap:"wrap"}}>
+          {["all","locked","unlocked","completed","failed"].map(s=>(
+            <button key={s} className={`av-tab ${filter===s?"on":"off"}`} onClick={()=>setFilter(s)}>
+              {statusLabels[s]}<span style={{marginLeft:5,fontSize:10,opacity:.6}}>{counts(s)}</span>
             </button>
           ))}
         </div>
 
-        {filtered.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "80px 0" }}>
-            <div style={{ fontSize: 44, marginBottom: 16 }}>🏛️</div>
-            <p style={{ color: "#334155", fontSize: 15 }}>{t.noGoals}</p>
+        {/* GRID — fixed 3 cols max */}
+        {displayed.length===0?(
+          <div style={{textAlign:"center",padding:"70px 0"}}>
+            <div style={{fontSize:32,marginBottom:12,opacity:.2}}>🏛</div>
+            <p style={{color:T.tx3,fontSize:14}}>{filter==="all"?t.noVaults:t.noFiltered}</p>
           </div>
-        ) : (
-          <div ref={confettiRef} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
-            {filtered.map((vault, i) => (
-              <VaultCard key={vault.id} vault={vault} index={i} onOutcome={handleOutcome} lang={lang} />
+        ):(
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:14}}>
+            {displayed.map((v,i)=>(
+              <VaultCard key={v.id} vault={v} index={i}
+                onOutcome={handleOutcome}
+                pinned={pins.includes(v.id)}
+                onTogglePin={handleTogglePin}
+                lang={lang}/>
             ))}
           </div>
         )}
       </div>
+
+      {/* MOBILE BOTTOM NAV */}
+      {isMobile && (
+        <nav className="av-bottom-nav">
+          <button className="av-bottom-nav-item" onClick={onBack}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="5" y="11" width="14" height="10" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+              <path d="M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            {t.newVault}
+          </button>
+          <button className="av-bottom-nav-item active">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+              <rect x="14" y="3" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+              <rect x="3" y="14" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+              <rect x="14" y="14" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+            </svg>
+            {t.yourVaults}
+          </button>
+        </nav>
+      )}
+
+      {signOutModal&&(
+        <SignOutModal onConfirm={()=>{setSignOutModal(false);onSignOut();}} onCancel={()=>setSignOutModal(false)} lang={lang}/>
+      )}
     </div>
   );
 }
 
-// ─── VaultCard ────────────────────────────────────────────────────────────────
-function VaultCard({ vault, index, onOutcome, lang }) {
-  const t = T[lang];
-  const [now, setNow] = useState(Date.now());
-  const cat = getCat(vault.category);
+// ─── VAULT CARD ───────────────────────────────────────────────────────────────
+function VaultCard({ vault,index,onOutcome,pinned,onTogglePin,lang }) {
+  const t=useT(lang);
+  const cat=getCat(vault.category);
+  const [now,setNow]=useState(Date.now());
+  const [busy,setBusy]=useState(false);
+  const [note,setNote]=useState("");
+  const [showNote,setShowNote]=useState(false);
+  const toast=useToast();
 
-  useEffect(() => {
-    if (vault.status !== "locked") return;
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [vault.status]);
+  useEffect(()=>{
+    if(vault.status!=="locked") return;
+    const id=setInterval(()=>setNow(Date.now()),1000);
+    return()=>clearInterval(id);
+  },[vault.status]);
 
-  const unlockMs = new Date(vault.unlock_at).getTime();
-  const createdMs = new Date(vault.created_at).getTime();
+  const unlockMs=new Date(vault.unlock_at).getTime();
+  const createdMs=new Date(vault.created_at).getTime();
+  const remaining=unlockMs-now;
+  const cd=fmtCountdown(remaining);
+  const progress=pct(createdMs,unlockMs);
 
-  if (vault.status === "locked") {
-    const remaining = unlockMs - now;
-    const cd = formatCountdown(remaining);
-    const pct = progressPercent(createdMs, unlockMs);
+  const timerDone=vault.status==="locked"&&remaining<=0;
 
+  const handle=async(outcome)=>{
+    if(busy) return;
+    setBusy(true);
+    await onOutcome(vault,outcome,note||undefined);
+    toast(outcome==="completed"?t.toastDelivered:t.toastMissed,outcome==="completed"?"success":"error");
+  };
+
+  const baseStyle={
+    position:"relative",overflow:"hidden",
+    background:T.surface,borderRadius:18,padding:"22px",
+    border:`1px solid ${T.border}`,
+    animation:`cardIn .3s ease ${Math.min(index,.5)*.06}s both`,
+    transition:"border-color .2s",fontFamily:FONT_BODY,
+  };
+
+  // ⑤ Pin button — no vault number stamp
+  const PinBtn=()=>(
+    <button onClick={e=>{e.stopPropagation();onTogglePin(vault.id);}} title={pinned?t.unpin:t.pin}
+      style={{position:"absolute",top:14,right:14,background:"transparent",border:"none",cursor:"pointer",padding:4,color:pinned?T.violet:T.tx3,fontSize:14,lineHeight:1,transition:"color .15s"}}
+      onMouseEnter={e=>e.currentTarget.style.color=T.violet}
+      onMouseLeave={e=>e.currentTarget.style.color=pinned?T.violet:T.tx3}>
+      {pinned?"📌":"⊙"}
+    </button>
+  );
+
+  // ── GRACE PERIOD ──
+  if(timerDone) {
     return (
-      <div style={{
-        background: "#0F1829", borderRadius: 20, padding: "22px",
-        border: `1px solid ${cat.color}33`,
-        boxShadow: `0 0 24px ${cat.color}12, inset 0 0 0 1px ${cat.color}0d`,
-        position: "relative", overflow: "hidden",
-        animation: `cardIn 0.4s cubic-bezier(0.34,1.56,0.64,1) ${index * 0.06}s both`,
-        fontFamily: "'Plus Jakarta Sans', sans-serif",
-      }}>
-        {/* Ambient corner glow */}
-        <div style={{ position: "absolute", top: -40, right: -40, width: 120, height: 120, borderRadius: "50%", background: `radial-gradient(circle, ${cat.color}18 0%, transparent 70%)`, pointerEvents: "none" }} />
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 16 }}>{cat.emoji}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: cat.color, background: `${cat.color}18`, padding: "3px 8px", borderRadius: 20 }}>{t.locked}</span>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.6 }}>
-            <rect x="5" y="11" width="14" height="10" rx="3" stroke={cat.color} strokeWidth="2" />
-            <path d="M8 11V7a4 4 0 018 0v4" stroke={cat.color} strokeWidth="2" strokeLinecap="round" />
-            <circle cx="12" cy="16" r="1.5" fill={cat.color} />
-          </svg>
+      <div style={{...baseStyle,borderColor:"rgba(139,92,246,.25)",boxShadow:"0 0 20px rgba(139,92,246,.07)"}}>
+        <PinBtn/>
+        {pinned&&<div className="chip" style={{background:T.violetDim,color:T.violet,border:`1px solid rgba(139,92,246,.25)`,marginBottom:12,fontSize:10}}>📌 {t.pinned}</div>}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:T.violet,animation:"gracePulse 1.5s ease-in-out infinite"}}/>
+          <span style={{fontFamily:FONT_DISPLAY,fontSize:12,fontWeight:700,color:T.violet,letterSpacing:".04em"}}>{t.graceTitle}</span>
         </div>
+        {/* Content hidden until unlocked — secret by design */}
+        <div style={{padding:"14px 16px",background:T.violetDim,borderRadius:12,border:`1px solid rgba(139,92,246,.2)`}}>
+          <p style={{fontSize:13,color:"rgba(139,92,246,.85)",lineHeight:1.7}}>{t.graceSub}</p>
+        </div>
+      </div>
+    );
+  }
 
-        {/* ─── SECRET MODE: content hidden ─────────────────────────────────── */}
-        {vault.secret ? (
-          <div style={{ marginBottom: 18, padding: "16px", background: `${cat.color}0d`, borderRadius: 12, border: `1px dashed ${cat.color}33`, textAlign: "center" }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>🔒</div>
-            <p style={{ fontSize: 13, color: "#334155", fontWeight: 500 }}>{t.secretHint}</p>
+  // ── LOCKED ──
+  if(vault.status==="locked") {
+    return (
+      <div style={{...baseStyle,borderColor:`${cat.color}28`}}>
+        <div style={{position:"absolute",top:-24,right:-24,width:80,height:80,borderRadius:"50%",background:`radial-gradient(circle,${cat.color}1A 0%,transparent 70%)`,pointerEvents:"none"}}/>
+        <PinBtn/>
+        {pinned&&<div className="chip" style={{background:T.violetDim,color:T.violet,border:`1px solid rgba(139,92,246,.25)`,marginBottom:10,fontSize:10}}>📌 {t.pinned}</div>}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14,paddingRight:24}}>
+          <span style={{fontSize:13,color:cat.color}}>{cat.symbol}</span>
+          <div className="chip" style={{background:`${cat.color}15`,color:cat.color,border:`1px solid ${cat.color}30`}}>{t.locked}</div>
+        </div>
+        {/* Always secret — show lock placeholder */}
+        <div style={{marginBottom:16,padding:"14px",background:`${cat.color}0D`,borderRadius:10,border:`1px dashed ${cat.color}2A`,textAlign:"center"}}>
+          <div style={{fontSize:22,marginBottom:4}}>🔒</div>
+          <p style={{fontSize:12,color:T.tx2}}>{lang==="fr"?"Contenu confidentiel — révélé à l'ouverture du coffre.":"Confidential — content revealed when the vault opens."}</p>
+        </div>
+        <div style={{marginBottom:14}}>
+          <div className="pbar" style={{marginBottom:7}}>
+            <div className="pfill" style={{width:`${progress}%`,background:`linear-gradient(90deg,${cat.color},${cat.color}99)`}}/>
           </div>
-        ) : (
-          <p style={{ fontSize: 15, fontWeight: 600, color: "#F1F5F9", lineHeight: 1.5, marginBottom: 18, minHeight: 48 }}>{vault.text}</p>
-        )}
-
-        {/* Progress bar */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ height: 3, background: "rgba(148,163,184,0.08)", borderRadius: 2, overflow: "hidden", marginBottom: 7 }}>
-            <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${cat.color}, ${cat.color}99)`, borderRadius: 2, transition: "width 1s linear" }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 11, color: "#334155" }}>{Math.round(pct)}% {t.elapsed}</span>
-            <span style={{ fontSize: 11, color: "#334155" }}>{vault.deadline_date} {vault.deadline_time}</span>
+          <div style={{display:"flex",justifyContent:"space-between"}}>
+            <span style={{fontSize:11,color:T.tx3}}>{Math.round(progress)}% {t.elapsed}</span>
+            <span style={{fontSize:11,color:T.tx3}}>{fmtDate(vault.deadline_date,vault.deadline_time)}</span>
           </div>
         </div>
-
-        {/* Countdown */}
-        <div style={{ display: "flex", gap: 8 }}>
-          {[{ v: cd.days, l: t.days }, { v: cd.hours, l: t.hrs }, { v: cd.minutes, l: t.min }, { v: cd.seconds, l: t.sec }].map(({ v, l }) => (
-            <div key={l} style={{ flex: 1, background: `${cat.color}0d`, borderRadius: 8, padding: "8px 4px", textAlign: "center", border: `1px solid ${cat.color}1a` }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: cat.color, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{String(v).padStart(2, "0")}</div>
-              <div style={{ fontSize: 10, color: "#334155", marginTop: 2, fontWeight: 500 }}>{l}</div>
+        <div style={{display:"flex",gap:6}}>
+          {[{v:cd.days,l:t.d},{v:cd.hours,l:t.h},{v:cd.minutes,l:t.m},{v:cd.seconds,l:t.s}].map(({v,l})=>(
+            <div key={l} style={{flex:1,padding:"9px 4px",borderRadius:10,textAlign:"center",background:`${cat.color}0F`,border:`1px solid ${cat.color}1E`}}>
+              <div style={{fontFamily:FONT_DISPLAY,fontSize:18,fontWeight:800,color:cat.color,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{String(v).padStart(2,"0")}</div>
+              <div style={{fontSize:10,color:T.tx3,marginTop:2,fontWeight:500}}>{l}</div>
             </div>
           ))}
         </div>
-        <style>{`@keyframes cardIn { from { opacity:0; transform:translateY(16px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
       </div>
     );
   }
 
-  if (vault.status === "unlocked") {
-    const [busy, setBusy] = useState(false);
-    const handle = async (outcome) => { setBusy(true); await onOutcome(vault.id, outcome); };
-
+  // ── UNLOCKED ──
+  if(vault.status==="unlocked") {
     return (
-      <div style={{
-        background: "#0F1829", borderRadius: 20, padding: "22px",
-        border: "1px solid rgba(52,211,153,0.35)",
-        boxShadow: "0 0 32px rgba(52,211,153,0.12), inset 0 0 0 1px rgba(52,211,153,0.1)",
-        animation: `cardIn 0.4s cubic-bezier(0.34,1.56,0.64,1) ${index * 0.06}s both`,
-        fontFamily: "'Plus Jakarta Sans', sans-serif", position: "relative", overflow: "hidden",
-      }}>
-        <div style={{ position: "absolute", top: -30, left: "50%", transform: "translateX(-50%)", width: 160, height: 80, borderRadius: "50%", background: "radial-gradient(ellipse, rgba(52,211,153,0.15) 0%, transparent 70%)", pointerEvents: "none" }} />
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 16 }}>{cat.emoji}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#34D399", background: "rgba(52,211,153,0.1)", padding: "3px 8px", borderRadius: 20 }}>{t.timeIsUp}</span>
+      <div style={{...baseStyle,borderColor:"rgba(52,211,153,.28)",boxShadow:"0 0 20px rgba(52,211,153,.06)"}}>
+        <PinBtn/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,paddingRight:24}}>
+          <div className="chip" style={{background:T.greenDim,color:T.green,border:"1px solid rgba(52,211,153,.25)"}}>
+            <span style={{animation:"vaultBounce 1.5s ease-in-out infinite",display:"inline-block"}}>🔓</span>
+            {t.timeIsUp}
           </div>
-          <span style={{ fontSize: 20, animation: "vaultBounce 1.5s ease-in-out infinite" }}>🔓</span>
         </div>
-
-        {/* Secret mode: show text only when unlocked */}
-        <p style={{ fontSize: 15, fontWeight: 600, color: "#F1F5F9", lineHeight: 1.5, marginBottom: 8 }}>
-          {vault.secret ? (vault.secret_text || vault.text) : vault.text}
-        </p>
-        {vault.secret && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 8, padding: "2px 8px", background: "rgba(52,211,153,0.1)", borderRadius: 12, border: "1px solid rgba(52,211,153,0.2)" }}>
-            <span style={{ fontSize: 11, color: "#34D399" }}>✨ {t.hiddenContent}</span>
-          </div>
-        )}
-        <p style={{ fontSize: 13, color: "#475569", marginBottom: 20 }}>{t.didYouAchieve}</p>
-
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={() => handle("completed")} disabled={busy}
-            style={{ flex: 1, padding: "12px 8px", borderRadius: 12, background: busy ? "rgba(52,211,153,0.15)" : "linear-gradient(135deg, #059669, #34D399)", border: "none", color: "#fff", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: busy ? "not-allowed" : "pointer", boxShadow: "0 4px 16px rgba(52,211,153,0.3)" }}>
-            {t.yesIdidIt}
+        {/* Reveal secret content on unlock */}
+        <p style={{fontSize:14,fontWeight:600,color:T.tx1,lineHeight:1.6,marginBottom:6}}>{vault.secret_text||vault.text}</p>
+        <div style={{display:"inline-flex",alignItems:"center",gap:4,marginBottom:14,padding:"2px 8px",background:T.greenDim,borderRadius:20,border:"1px solid rgba(52,211,153,.2)"}}>
+          <span style={{fontSize:11,color:T.green}}>✨ {lang==="fr"?"Contenu révélé":"Content revealed"}</span>
+        </div>
+        <p style={{fontSize:13,color:T.tx2,marginBottom:14,lineHeight:1.5,fontWeight:500}}>{t.didYouAchieve}</p>
+        {showNote?(
+          <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder={t.addNote} rows={2}
+            style={{width:"100%",background:T.surfaceEl,border:`1px solid ${T.borderMd}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.tx1,lineHeight:1.6,resize:"none",outline:"none",marginBottom:12,fontFamily:FONT_BODY}}/>
+        ):(
+          <button onClick={()=>setShowNote(true)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:12,color:T.tx3,marginBottom:12,padding:0,textDecoration:"underline",textDecorationStyle:"dotted"}}>
+            + {t.addNote.replace("…","")}
           </button>
-          <button onClick={() => handle("failed")} disabled={busy}
-            style={{ flex: 1, padding: "12px 8px", borderRadius: 12, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#F87171", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer" }}>
-            {t.iFellShort}
+        )}
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>handle("completed")} disabled={busy}
+            style={{flex:1,padding:"11px 8px",borderRadius:11,border:"none",cursor:busy?"wait":"pointer",background:busy?"rgba(52,211,153,.15)":"linear-gradient(135deg,#059669,#34D399)",color:"#fff",fontSize:13,fontWeight:700,fontFamily:FONT_DISPLAY,boxShadow:busy?"none":"0 4px 16px rgba(52,211,153,.25)",transition:"opacity .15s",opacity:busy?.6:1}}>
+            {t.yes}
+          </button>
+          <button onClick={()=>handle("failed")} disabled={busy}
+            style={{flex:1,padding:"11px 8px",borderRadius:11,cursor:busy?"wait":"pointer",background:T.redDim,border:`1px solid rgba(248,113,113,.2)`,color:T.red,fontSize:13,fontWeight:600,fontFamily:FONT_DISPLAY,transition:"opacity .15s",opacity:busy?.6:1}}>
+            {t.no}
           </button>
         </div>
-        <style>{`@keyframes vaultBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }`}</style>
       </div>
     );
   }
 
-  if (vault.status === "completed") {
+  // ── COMPLETED ──
+  if(vault.status==="completed") {
     return (
-      <div style={{
-        background: "linear-gradient(135deg, rgba(52,211,153,0.07) 0%, #0F1829 60%)",
-        borderRadius: 20, padding: "22px",
-        border: "1px solid rgba(52,211,153,0.2)",
-        animation: `cardIn 0.4s cubic-bezier(0.34,1.56,0.64,1) ${index * 0.06}s both`,
-        fontFamily: "'Plus Jakarta Sans', sans-serif",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 16 }}>{cat.emoji}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#34D399", background: "rgba(52,211,153,0.1)", padding: "3px 8px", borderRadius: 20 }}>{t.achieved}</span>
-          </div>
-          <span style={{ fontSize: 20 }}>🏆</span>
+      <div style={{...baseStyle,background:`linear-gradient(145deg,rgba(52,211,153,.07) 0%,${T.surface} 55%)`,borderColor:"rgba(52,211,153,.2)"}}>
+        <PinBtn/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,paddingRight:24}}>
+          <div className="chip" style={{background:T.greenDim,color:T.green,border:"1px solid rgba(52,211,153,.22)"}}>✓ {t.achieved}</div>
+          <span style={{fontSize:16,opacity:.8}}>🏆</span>
         </div>
-        <p style={{ fontSize: 14, fontWeight: 600, color: "#475569", lineHeight: 1.5, marginBottom: 14, textDecoration: "line-through", textDecorationColor: "rgba(52,211,153,0.4)" }}>{vault.text || vault.secret_text}</p>
-        {vault.feedback_message && (
-          <div style={{ padding: "12px 14px", background: "rgba(52,211,153,0.06)", borderRadius: 10, borderLeft: "3px solid #34D399" }}>
-            <p style={{ fontSize: 12, color: "#6EE7B7", fontWeight: 500, lineHeight: 1.65, fontStyle: "italic" }}>"{vault.feedback_message}"</p>
+        <p style={{fontSize:14,color:T.tx2,lineHeight:1.55,marginBottom:12,textDecoration:"line-through",textDecorationColor:"rgba(52,211,153,.4)"}}>{vault.secret_text||vault.text}</p>
+        {vault.feedback_message&&(
+          <div style={{padding:"11px 14px",background:T.greenDim,borderRadius:10,borderLeft:`3px solid ${T.green}`}}>
+            <p style={{fontSize:12,color:"rgba(52,211,153,.85)",fontStyle:"italic",lineHeight:1.65}}>"{vault.feedback_message}"</p>
           </div>
         )}
-        <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#34D399" }} />
-          <span style={{ fontSize: 11, color: "#334155" }}>{vault.deadline_date}</span>
+        <div style={{marginTop:12,display:"flex",alignItems:"center",gap:5}}>
+          <div style={{width:4,height:4,borderRadius:"50%",background:T.green}}/>
+          <span style={{fontSize:11,color:T.tx3}}>{fmtDate(vault.deadline_date,vault.deadline_time)}</span>
         </div>
       </div>
     );
   }
 
-  // failed
+  // ── FAILED ──
   return (
-    <div style={{
-      background: "#0F1829", borderRadius: 20, padding: "22px",
-      border: "1px solid rgba(148,163,184,0.07)", opacity: 0.75,
-      animation: `cardIn 0.4s cubic-bezier(0.34,1.56,0.64,1) ${index * 0.06}s both`,
-      fontFamily: "'Plus Jakarta Sans', sans-serif",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 16 }}>{cat.emoji}</span>
-          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#475569", background: "rgba(148,163,184,0.06)", padding: "3px 8px", borderRadius: 20 }}>{t.notThisTime}</span>
-        </div>
-        <span style={{ fontSize: 16 }}>💪</span>
+    <div style={{...baseStyle,opacity:.55}}>
+      <PinBtn/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingRight:24}}>
+        <div className="chip" style={{background:"rgba(255,255,255,.04)",color:T.tx2,border:`1px solid ${T.border}`}}>{t.missed}</div>
+        <span style={{fontSize:14,opacity:.4}}>💪</span>
       </div>
-      <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.5, marginBottom: 12, textDecoration: "line-through" }}>{vault.text || vault.secret_text}</p>
-      {vault.feedback_message && (
-        <p style={{ fontSize: 12, color: "#334155", fontStyle: "italic", lineHeight: 1.6 }}>{vault.feedback_message}</p>
+      <p style={{fontSize:14,color:T.tx2,lineHeight:1.55,marginBottom:10,textDecoration:"line-through",textDecorationColor:T.tx3}}>{vault.secret_text||vault.text}</p>
+      {vault.feedback_message&&(
+        <p style={{fontSize:12,color:T.tx3,fontStyle:"italic",lineHeight:1.6}}>{vault.feedback_message}</p>
       )}
     </div>
   );
 }
 
-// ─── App Root ─────────────────────────────────────────────────────────────────
+// ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [screen, setScreen] = useState("login");
-  const [user, setUser] = useState(null);
-  const [vaults, setVaults] = useState([]);
-  const [lang, setLang] = useState("fr");
+  const [screen,setScreen]=useState("login");
+  const [user,setUser]=useState(null);
+  const [vaults,setVaults]=useState([]);
+  const [lang,setLang]=useState("fr");
 
-  // Supabase Auth listener
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const u = session.user;
-        setUser({ uid: u.id, email: u.email, name: u.user_metadata?.full_name || u.email });
-        setScreen((prev) => prev === "login" ? "splash" : prev);
+  useEffect(()=>{
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{
+      if(session?.user){
+        const u=session.user;
+        setUser({uid:u.id,email:u.email,name:u.user_metadata?.full_name||u.email});
+        setScreen(p=>p==="login"?"splash":p);
       } else {
-        setUser(null);
-        setVaults([]);
-        setScreen("login");
+        setUser(null);setVaults([]);setScreen("landing");
       }
     });
-    return () => subscription.unsubscribe();
-  }, []);
+    return()=>subscription.unsubscribe();
+  },[]);
 
-  // Real-time vaults
-  useEffect(() => {
-    if (!user) return;
-    const unsub = watchVaults(user.uid, setVaults);
-    return unsub;
-  }, [user]);
+  useEffect(()=>{
+    if(!user) return;
+    return watchVaults(user.uid,setVaults);
+  },[user]);
 
-  const handleSplashComplete = () => setScreen("dashboard");
+  const handleUpdateVault=useCallback((id,patch)=>{
+    setVaults(prev=>prev.map(v=>v.id===id?{...v,...patch}:v));
+  },[]);
 
-  const handleAddVault = async (params) => {
-    await createVault(params);
+  const handleAddVault=async(params)=>{
+    const unlockAt=new Date(`${params.deadlineDate}T${params.deadlineTime}:00`).toISOString();
+    const temp={
+      id:"temp-"+Date.now(),uid:params.uid,email:params.email,
+      text:null, secret_text:params.text,
+      secret:true, deadline_date:params.deadlineDate,deadline_time:params.deadlineTime,
+      unlock_at:unlockAt,category:params.category,status:"locked",
+      created_at:new Date().toISOString(),feedback_message:null,responded_at:null,
+    };
+    setVaults(p=>[temp,...p]);
     setScreen("vaults");
+    await createVault(params);
   };
 
-  const handleSignOut = async () => {
-    await signOutUser();
-  };
-
-  const sharedProps = { lang, setLang };
-
+  const shared={lang,setLang};
   return (
-    <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      {screen === "login" && <LoginScreen onLoginSuccess={() => {}} {...sharedProps} />}
-      {screen === "splash" && <SplashScreen onComplete={handleSplashComplete} {...sharedProps} />}
-      {screen === "dashboard" && user && (
-        <DashboardScreen user={user} vaults={vaults} onAddVault={handleAddVault}
-          onViewVaults={() => setScreen("vaults")} onSignOut={handleSignOut} {...sharedProps} />
+    <ToastProvider>
+      <style>{CSS}</style>
+      {screen === "landing" && <LandingPage lang={lang} setLang={setLang} onEnter={() => setScreen("login")} />}
+      {screen==="login"&&<Login {...shared}/>}
+      {screen==="splash"&&<Splash onComplete={()=>setScreen("dashboard")} {...shared}/>}
+      {screen==="dashboard"&&user&&(
+        <Dashboard user={user} vaults={vaults}
+          onAdd={handleAddVault}
+          onViewVaults={()=>setScreen("vaults")}
+          onSignOut={()=>supabase.auth.signOut()}
+          {...shared}/>
       )}
-      {screen === "vaults" && user && (
-        <VaultsScreen vaults={vaults} onBack={() => setScreen("dashboard")}
-          onSignOut={handleSignOut} {...sharedProps} />
+      {screen==="vaults"&&user&&(
+        <VaultsScreen vaults={vaults}
+          onBack={()=>setScreen("dashboard")}
+          onSignOut={()=>supabase.auth.signOut()}
+          onUpdateVault={handleUpdateVault}
+          {...shared}/>
       )}
-    </div>
+    </ToastProvider>
   );
 }
