@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IlumviVault — Mentions légales / Legal Notice</title>
+<style>
+  :root{
+    --bg:#0F172A; --card:#1E293B; --border:rgba(148,163,184,0.14); --text:#F1F5F9; --muted:#94A3B8; --violet:#8B5CF6;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Inter',system-ui,-apple-system,sans-serif; line-height:1.7;
+  }
+  .wrap{ max-width:760px; margin:0 auto; padding:48px 24px 80px; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:32px; gap:12px; flex-wrap:wrap; }
+  .brand{ font-size:12px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); }
+  .langbtn{
+    font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; border:1px solid var(--border);
+    background:var(--card); color:var(--muted); cursor:pointer;
+  }
+  .langbtn:hover{ color:var(--violet); border-color:rgba(139,92,246,.4); }
+  h1{ font-size:26px; font-weight:700; letter-spacing:-0.02em; margin:0 0 6px; }
+  .updated{ font-size:12px; color:var(--muted); margin-bottom:32px; }
+  h2{ font-size:15px; font-weight:600; margin:32px 0 8px; color:var(--text); }
+  p, li{ font-size:14px; color:#CBD5E1; }
+  ul{ padding-left:20px; margin:8px 0; }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px 28px; }
+  .lang-block{ display:none; }
+  .lang-block.active{ display:block; }
+  a{ color:var(--violet); }
+  footer{ margin-top:40px; text-align:center; font-size:11px; color:var(--muted); }
+  footer a{ color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <span class="brand">IlumviVault</span>
+    <button class="langbtn" onclick="toggleLang()" id="langBtn">English</button>
+  </div>
+
+  <!-- FRANÇAIS -->
+  <div class="lang-block active" data-lang="fr">
+    <h1>Mentions légales</h1>
+    <div class="updated">Dernière mise à jour : 11/07/2026</div>
+    <div class="card">
+      <h2>1. Éditeur du site</h2>
+      <p>
+        Ce site est édité, à titre non professionnel, par une personne physique.<br />
+        Nom / pseudonyme du responsable de publication : Ilumvi<br />
+        Pays de résidence : Madagascar<br />
+        E-mail de contact : Ilumvi.pro@gmail.com
+      </p>
+      <p>
+        Conformément à l'article 6-III de la LCEN, l'éditeur étant une personne physique n'agissant pas à
+        titre professionnel, son identité complète et son adresse ne sont pas rendues publiques mais sont
+        communiquées à l'hébergeur du site, qui les conserve de façon confidentielle sauf réquisition d'une
+        autorité judiciaire.
+      </p>
+
+      <h2>2. Hébergement</h2>
+      <p>
+        Application hébergée par : Vercel Inc. (offre gratuite),
+        340 S Lemon Ave #4133, Walnut, CA 91789, États-Unis.<br />
+        Services d'authentification et de stockage cloud fournis par
+        <a href="https://supabase.com" target="_blank" rel="noopener">Supabase Inc.</a><br />
+        Connexion via compte Google : services fournis par
+        <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Ireland Ltd.</a>
+      </p>
+
+      <h2>3. Propriété intellectuelle</h2>
+      <p>
+        L'ensemble des éléments (textes, marques, logos, code) constituant IlumviVault sont, sauf mention
+        contraire, la propriété exclusive de l'éditeur ou de ses concédants. Toute reproduction non autorisée
+        est interdite.
+      </p>
+
+      <h2>4. Responsabilité</h2>
+      <p>
+        IlumviVault est fourni « en l'état », sans garantie d'absence d'erreurs ou d'interruptions.
+        L'éditeur ne saurait être tenu responsable des dommages directs ou indirects résultant de
+        l'utilisation du service, dans les limites autorisées par la loi applicable.
+      </p>
+
+      <h2>5. Données personnelles</h2>
+      <p>
+        Le traitement des données personnelles est détaillé dans notre
+        <a href="/privacy.html">politique de confidentialité</a>.
+      </p>
+
+      <h2>6. Droit applicable</h2>
+      <p>Les présentes mentions légales sont soumises au droit de Madagascar.</p>
+
+      <h2>7. Contact</h2>
+      <p>Pour toute question : Ilumvi.pro@gmail.com.</p>
+    </div>
+  </div>
+
+  <!-- ENGLISH -->
+  <div class="lang-block" data-lang="en">
+    <h1>Legal Notice</h1>
+    <div class="updated">Last updated: 11/07/2026</div>
+    <div class="card">
+      <h2>1. Publisher</h2>
+      <p>
+        This site is published, on a non-professional basis, by an individual.<br />
+        Name / pseudonym of the publication director: Ilumvi<br />
+        Country of residence: Madagascar<br />
+        Contact email: Ilumvi.pro@gmail.com
+      </p>
+      <p>
+        As the publisher is an individual acting in a non-professional capacity, full identity and address
+        are not made public but are provided to the hosting provider, which keeps them confidential except
+        upon request from a judicial authority (as applicable under local law equivalent to France's LCEN).
+      </p>
+
+      <h2>2. Hosting</h2>
+      <p>
+        Application hosted by: Vercel Inc. (free tier),
+        340 S Lemon Ave #4133, Walnut, CA 91789, USA.<br />
+        Authentication and cloud storage services provided by
+        <a href="https://supabase.com" target="_blank" rel="noopener">Supabase Inc.</a><br />
+        Sign-in with Google: services provided by
+        <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Ireland Ltd.</a>
+      </p>
+
+      <h2>3. Intellectual property</h2>
+      <p>
+        All elements (text, trademarks, logos, code) making up IlumviVault are, unless stated otherwise, the
+        exclusive property of the publisher or its licensors. Unauthorized reproduction is prohibited.
+      </p>
+
+      <h2>4. Liability</h2>
+      <p>
+        IlumviVault is provided "as is", without warranty of error-free or uninterrupted operation. The
+        publisher shall not be liable for direct or indirect damages arising from use of the service, to the
+        extent permitted by applicable law.
+      </p>
+
+      <h2>5. Personal data</h2>
+      <p>
+        The processing of personal data is detailed in our <a href="/privacy.html">privacy policy</a>.
+      </p>
+
+      <h2>6. Governing law</h2>
+      <p>This legal notice is governed by the laws of Madagascar.</p>
+
+      <h2>7. Contact</h2>
+      <p>For any question: Ilumvi.pro@gmail.com.</p>
+    </div>
+  </div>
+
+  <footer>IlumviVault · <a href="/privacy.html">Privacy Policy / Politique de confidentialité</a></footer>
+</div>
+
+<script>
+  function toggleLang() {
+    var current = document.querySelector('.lang-block.active').dataset.lang;
+    var next = current === 'fr' ? 'en' : 'fr';
+    document.querySelectorAll('.lang-block').forEach(function (el) {
+      el.classList.toggle('active', el.dataset.lang === next);
+    });
+    document.documentElement.lang = next;
+    document.getElementById('langBtn').textContent = next === 'fr' ? 'English' : 'Français';
+  }
+</script>
+</body>
+</html>

@@ -12,7 +12,7 @@ import { CommitModal } from "../components/CommitModal";
 import { SignOutModal } from "../components/SignOutModal";
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-export function Dashboard({ user,vaults,onAdd,onViewVaults,onSignOut,lang,setLang }) {
+export function Dashboard({ user,vaults,onAdd,onViewVaults,onAccount,onSignOut,lang,setLang }) {
   const t=useT(lang);
   const toast=useToast();
   const { isMobile } = useBreakpoint();
@@ -52,6 +52,7 @@ export function Dashboard({ user,vaults,onAdd,onViewVaults,onSignOut,lang,setLan
     { icon:"🌐", label: lang==="fr"?"English":"Français", onClick:()=>setLang(lang==="fr"?"en":"fr") },
     "divider",
     ...(vaults.length>0 ? [{ icon:"🏛", label:`${t.viewVaults} (${vaults.length})`, onClick:onViewVaults }] : []),
+    { icon:"👤", label:t.account, onClick:onAccount },
     "divider",
     { icon:"🚪", label:t.signOut, onClick:()=>setSignOutModal(true) },
   ];
@@ -74,6 +75,7 @@ export function Dashboard({ user,vaults,onAdd,onViewVaults,onSignOut,lang,setLan
                   <span style={{padding:"1px 6px",borderRadius:20,background:T.violetDim,color:T.violet,fontSize:11,fontWeight:700}}>{vaults.length}</span>
                 </button>
               )}
+              <button className="av-btn-ghost" onClick={onAccount} style={{padding:"8px 12px"}}>{t.account}</button>
               <button className="av-btn-ghost" onClick={()=>setSignOutModal(true)} style={{padding:"8px 12px"}}>{t.signOut}</button>
             </div>
           )}

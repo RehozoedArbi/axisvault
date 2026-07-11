@@ -10,7 +10,7 @@ import { VaultCard } from "../components/VaultCard";
 import { SignOutModal } from "../components/SignOutModal";
 
 // ─── VAULTS SCREEN ────────────────────────────────────────────────────────────
-export function VaultsScreen({ vaults,onBack,onSignOut,lang,setLang,onUpdateVault }) {
+export function VaultsScreen({ vaults,onBack,onAccount,onSignOut,lang,setLang,onUpdateVault }) {
   const t=useT(lang);
   const { isMobile, width } = useBreakpoint();
   const [vis,setVis]=useState(false);
@@ -46,6 +46,7 @@ export function VaultsScreen({ vaults,onBack,onSignOut,lang,setLang,onUpdateVaul
     { icon:"🌐", label: lang==="fr"?"English":"Français", onClick:()=>setLang(lang==="fr"?"en":"fr") },
     "divider",
     { icon:"➕", label:`+ ${t.newVault}`, onClick:onBack },
+    { icon:"👤", label:t.account, onClick:onAccount },
     "divider",
     { icon:"🚪", label:t.signOut, onClick:()=>setSignOutModal(true) },
   ];
@@ -63,6 +64,7 @@ export function VaultsScreen({ vaults,onBack,onSignOut,lang,setLang,onUpdateVaul
             <div style={{display:"flex",gap:6,alignItems:"center"}}>
               <LangToggle lang={lang} setLang={setLang}/>
               <button className="av-btn-ghost" onClick={onBack} style={{marginLeft:4}}>+ {t.newVault}</button>
+              <button className="av-btn-ghost" onClick={onAccount}>{t.account}</button>
               <button className="av-btn-ghost" onClick={()=>setSignOutModal(true)}>{t.signOut}</button>
             </div>
           )}
