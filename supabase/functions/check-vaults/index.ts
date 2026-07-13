@@ -1,4 +1,4 @@
-// AxisVault — Edge Function: check-vaults
+// IlumviVault — Edge Function: check-vaults
 // Triggered every 15 min by GitHub Actions cron
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -66,7 +66,7 @@ serve(async (req) => {
             <div style="text-align:center;margin-bottom:40px;">
               <div style="display:inline-block;width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#8B5CF6,#3B82F6);line-height:56px;text-align:center;font-size:28px;margin-bottom:16px;">🔓</div>
               <h1 style="color:#F1F5F9;font-size:28px;font-weight:800;margin:0 0 8px;letter-spacing:-0.02em;">Your vault is open.</h1>
-              <p style="color:#64748B;font-size:15px;margin:0;line-height:1.6;">The time has come. Head back to AxisVault to see your commitment.</p>
+              <p style="color:#64748B;font-size:15px;margin:0;line-height:1.6;">The time has come. Head back to IlumviVault to see your commitment.</p>
             </div>
 
             <div style="background:#0F1829;border:1px solid rgba(139,92,246,0.25);border-radius:16px;padding:24px;margin-bottom:32px;">
@@ -76,12 +76,12 @@ serve(async (req) => {
             </div>
 
             <div style="text-align:center;margin-bottom:40px;">
-              <a href="${SUPABASE_URL.replace("supabase.co", "vercel.app")}"
+              <a href="https://ilumvivault.vercel.app/"
                 style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#8B5CF6,#3B82F6);color:#fff;font-size:15px;font-weight:700;text-decoration:none;border-radius:9999px;letter-spacing:0.02em;">
-                Open AxisVault →
+                Open IlumviVault →
               </a>
             </div>
-            <p style="color:#1E293B;font-size:12px;text-align:center;margin:0;">AxisVault · Lock in. Level up.</p>
+            <p style="color:#1E293B;font-size:12px;text-align:center;margin:0;">IlumviVault · Lock in. Level up.</p>
           </div>
         </body>
         </html>
@@ -96,7 +96,7 @@ serve(async (req) => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          sender: { name: "AxisVault", email: SENDER_EMAIL },
+          sender: { name: "IlumviVault", email: SENDER_EMAIL },
           to: [{ email: vault.email }],
           subject: "🔓 Your vault is open — time to face it.",
           htmlContent: emailHtml,
